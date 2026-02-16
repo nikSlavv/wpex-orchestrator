@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import streamlit as st
+import streamlit.components.v1 as components
 import docker
 import psycopg2
 import os
@@ -431,34 +432,50 @@ tab_servers, tab_keys = st.tabs(["📦 Server & Istanze", "🔐 Database Chiavi"
 # TAB 1: GESTIONE SERVER
 # ==========================
 with tab_servers:
-    # --- FORM CREAZIONE ---
-    with st.expander("➕ Aggiungi Nuovo Server", expanded=False):
-        with st.form("new_server_form", clear_on_submit=True):
-            c1, c2, c3 = st.columns(3)
-            srv_name = c1.text_input("Nome Server", placeholder="es. alpha")
-            srv_udp = c2.number_input("Porta UDP", value=40000, step=1)
-            srv_web = c3.number_input("Porta Web", value=8080, step=1)
-            
-            # Carichiamo tutte le chiavi disponibili
-            all_keys_info = get_all_keys_info()
-            key_map = {k['id']: k['alias'] for k in all_keys_info} # ID -> Alias
-            
-            selected_ids = st.multiselect("Seleziona Chiavi", options=key_map.keys(), format_func=lambda x: key_map[x])
+    if st.session_state.get('view_server_url'):
+        # --- MODALITA' VISUALIZZAZIONE SERVER ---
+        st.subheader("🖥️ Monitor Server")
+        if st.button("⬅️ Torna alla Lista"):
+            st.session_state['view_server_url'] = None
+            st.rerun()
+        
+        url = st.session_state['view_server_url']
+        st.info(f"Visualizzazione diretta: {url}")
+        
+        # Iframe per vedere la GUI del server
+        # Altezza adattabile
+        components.iframe(url, height=800, scrolling=True)
 
-            if st.form_submit_button("Crea Server"):
-                srv_name = srv_name.lower().replace(" ", "-")
-                if srv_name and selected_ids:
-                    ok, msg = add_server_db(srv_name, srv_udp, srv_web, selected_ids)
-                    if ok:
-                        # Estraiamo le chiavi raw per docker
-                        raw_keys = [k['key'] for k in all_keys_info if k['id'] in selected_ids]
-                        res, d_msg = deploy_server_docker(srv_name, srv_udp, srv_web, raw_keys)
-                        if res: st.rerun()
-                        else: st.error(d_msg)
-                    else: st.error(msg)
-                else: st.warning("Dati mancanti.")
+    else:
+        # --- LISTA SERVER ---
+        with st.expander("➕ Aggiungi Nuovo Server", expanded=False):
+            with st.form("new_server_form", clear_on_submit=True):
+                c1, c2, c3 = st.columns(3)
+                srv_name = c1.text_input("Nome Server", placeholder="es. alpha")
+                srv_udp = c2.number_input("Porta UDP", value=40000, step=1)
+                srv_web = c3.number_input("Porta Web", value=8080, step=1)
+                
+                # Carichiamo tutte le chiavi disponibili
+                all_keys_info = get_all_keys_info()
+                key_map = {k['id']: k['alias'] for k in all_keys_info} # ID -> Alias
+                
+                selected_ids = st.multiselect("Seleziona Chiavi", options=key_map.keys(), format_func=lambda x: key_map[x])
 
-    st.divider()
+                if st.form_submit_button("Crea Server"):
+                    srv_name = srv_name.lower().replace(" ", "-")
+                    if srv_name and selected_ids:
+                        ok, msg = add_server_db(srv_name, srv_udp, srv_web, selected_ids)
+                        if ok:
+                            # Estraiamo le chiavi raw per docker
+                            raw_keys = [k['key'] for k in all_keys_info if k['id'] in selected_ids]
+                            res, d_msg = deploy_server_docker(srv_name, srv_udp, srv_web, raw_keys)
+                            if res: st.rerun()
+                            else: st.error(d_msg)
+                        else: st.error(msg)
+                    else: st.warning("Dati mancanti.")
+
+        st.divider()
+
 
     # --- LISTA SERVER ---
     servers = get_servers_list()
@@ -523,7 +540,10 @@ with tab_servers:
                     delete_server_db(srv['id'])
                     st.rerun()
                 
-                st.link_button(f"📊 Apri Stats ({srv['web_port']})", f"http://{CURRENT_HOST_IP}:{srv['web_port']}", type="primary")
+                # Visualizza nel dashboard (IFrame)
+                if st.button(f"👁️ Visualizza GUI", key=f"view_{srv['id']}"):
+                     st.session_state['view_server_url'] = f"http://{CURRENT_HOST_IP}:{srv['web_port']}"
+                     st.rerun()
             
             if st.checkbox("Logs", key=f"lg_{srv['id']}"):
                 st.code(get_logs(srv['name']))
