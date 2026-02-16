@@ -101,6 +101,17 @@ def init_db():
                 PRIMARY KEY (server_id, key_id)
             );
         """)
+
+        # Tabella Utenti per Login
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
         conn.commit()
         conn.close()
 
@@ -274,6 +285,122 @@ def get_logs(name):
     except:
         return "Nessun log."
 
+# --- AUTH FUNCTIONS ---
+
+def create_user(username, password):
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            # Usa pgcrypto per l'hashing sicuro direttamente nel DB
+            cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, crypt(%s, gen_salt('bf')));", 
+                        (username, password))
+            conn.commit()
+            conn.close()
+            return True, "Utente creato con successo!"
+        except psycopg2.errors.UniqueViolation:
+            return False, "Username già esistente."
+        except Exception as e:
+            return False, f"Errore creazione utente: {e}"
+    return False, "Errore connessione DB"
+
+def check_login(username, password):
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            # Verifica password con crypt
+            cur.execute("SELECT id, username FROM users WHERE username = %s AND password_hash = crypt(%s, password_hash);", 
+                        (username, password))
+            user = cur.fetchone()
+            conn.close()
+            if user:
+                return True, user
+            return False, None
+        except Exception as e:
+            return False, None
+    return False, None
+
+def login_page():
+    # Stile Moderno / Glassmorphism per la login
+    st.markdown("""
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: auto;
+            padding: 2rem;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        div.stButton > button {
+            width: 100%;
+            background-color: #ff4b4b;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        div.stButton > button:hover {
+            background-color: #ff3333;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4);
+        }
+        h1 { text-align: center; margin-bottom: 2rem; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.title("🔐 WPEX Login")
+        
+        tab_login, tab_register = st.tabs(["Accedi", "Registrati"])
+        
+        with tab_login:
+            with st.form("login_form"):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Entra")
+                
+                if submit:
+                    if username and password:
+                        success, user_data = check_login(username, password)
+                        if success:
+                            st.session_state['logged_in'] = True
+                            st.session_state['username'] = user_data[1]
+                            st.toast(f"Benvenuto {user_data[1]}!", icon="👋")
+                            time.sleep(0.5)
+                            st.rerun()
+                        else:
+                            st.error("Credenziali non valide.")
+                    else:
+                        st.warning("Inserisci username e password.")
+
+        with tab_register:
+            with st.form("register_form"):
+                new_user = st.text_input("Nuovo Username")
+                new_pass = st.text_input("Nuova Password", type="password")
+                confirm_pass = st.text_input("Conferma Password", type="password")
+                reg_submit = st.form_submit_button("Crea Account")
+                
+                if reg_submit:
+                    if new_user and new_pass:
+                        if new_pass != confirm_pass:
+                            st.error("Le password non coincidono.")
+                        else:
+                            ok, msg = create_user(new_user, new_pass)
+                            if ok:
+                                st.success(msg)
+                                time.sleep(1)
+                            else:
+                                st.error(msg)
+                    else:
+                        st.warning("Compila tutti i campi.")
+
 # --- INIT ---
 if 'db_init' not in st.session_state:
     init_db()
@@ -281,6 +408,20 @@ if 'db_init' not in st.session_state:
     st.session_state['db_init'] = True
 
 # --- UI LAYOUT ---
+if 'logged_in' not in st.session_state:
+    st.session_state['logged_in'] = False
+
+if not st.session_state['logged_in']:
+    login_page()
+    st.stop()  # Ferma l'esecuzione qui se non loggato
+
+# SIDEBAR LOGOUT
+with st.sidebar:
+    st.write(f"Utente: **{st.session_state.get('username', 'Admin')}**")
+    if st.button("Logout", type="secondary"):
+        st.session_state['logged_in'] = False
+        st.rerun()
+
 st.title("🏢 WPEX Multi-Server Orchestrator")
 st.markdown(f"<small>Host IP: `{CURRENT_HOST_IP}`</small>", unsafe_allow_html=True)
 
