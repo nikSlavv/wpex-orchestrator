@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  # 1. Database
+  db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: wpex_admin
+      POSTGRES_DB: wpex_keys_db
+      POSTGRES_PASSWORD_FILE: /run/secrets/db_password
+    volumes:
+      - wpex_db_data:/var/lib/postgresql/data
+    secrets:
+      - db_password
+    deploy:
+      replicas: 1
+
+  # 2. Manager GUI
+  manager:
+    image: python:3.9-slim
+    volumes:
+      # Fondamentale per creare altri servizi
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./manager.py:/app/manager.py
+    environment:
+      DB_HOST: db
+      DB_NAME: wpex_keys_db
+      DB_USER: wpex_admin
+    secrets:
+      - db_password
+      - db_encryption_key
+    working_dir: /app
+    command: >
+      bash -c "pip install streamlit docker psycopg2-binary && streamlit run manager.py"
+    ports:
+      - "8501:8501"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+volumes:
+  wpex_db_data:
+
+secrets:
+  db_password:
+    external: true
+  db_encryption_key:
+    external: true
+
