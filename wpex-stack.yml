@@ -12,6 +12,8 @@ services:
       - wpex_db_data:/var/lib/postgresql/data
     secrets:
       - db_password
+    networks:
+      - wpex-network
     deploy:
       replicas: 1
 
@@ -25,6 +27,9 @@ services:
       DB_HOST: db
       DB_NAME: wpex_keys_db
       DB_USER: wpex_admin
+      WPEX_NETWORK: wpex_wpex-network
+    networks:
+      - wpex-network
     secrets:
       - db_password
       - db_encryption_key
@@ -43,11 +48,18 @@ services:
       - "80:80"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - wpex-network
     depends_on:
       - manager
     deploy:
       placement:
         constraints: [node.role == manager]
+
+networks:
+  wpex-network:
+    driver: overlay
+    attachable: true
 
 volumes:
   wpex_db_data:

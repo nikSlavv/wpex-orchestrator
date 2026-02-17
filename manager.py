@@ -59,6 +59,7 @@ DB_NAME = os.getenv("DB_NAME", "wpex_keys_db")
 DB_USER = os.getenv("DB_USER", "wpex_admin")
 DB_PASS = get_secret("db_password", "admin")
 DATA_KEY = get_secret("db_encryption_key", "mysecretkey")
+WPEX_NETWORK = os.getenv("WPEX_NETWORK", "wpex_wpex-network")
 
 st.set_page_config(page_title="WPEX Orchestrator", page_icon="🏢", layout="wide")
 
@@ -255,8 +256,7 @@ def deploy_server_docker(name, udp_port, web_port, keys_list):
     if not keys_list: cmd_args.extend(["--allow", "placeholder"])
 
     port_bindings = {
-        f'{udp_port}/udp': udp_port,
-        '8080/tcp': web_port
+        f'{udp_port}/udp': udp_port
     }
 
     try:
@@ -269,6 +269,7 @@ def deploy_server_docker(name, udp_port, web_port, keys_list):
             name=container_name,
             command=cmd_args,
             ports=port_bindings,
+            network=WPEX_NETWORK,
             restart_policy={"Name": "always"},
             detach=True
         )
@@ -551,9 +552,9 @@ with tab_servers:
                     delete_server_db(srv['id'])
                     st.rerun()
                 
-                # Visualizza nel dashboard (IFrame)
+                # Visualizza nel dashboard (IFrame proxato)
                 if st.button(f"👁️ Visualizza GUI", key=f"view_{srv['id']}"):
-                     st.session_state['view_server_url'] = f"http://{CURRENT_HOST_IP}:{srv['web_port']}"
+                     st.session_state['view_server_url'] = f"/wpex-{srv['name']}/"
                      st.rerun()
             
             if st.checkbox("Logs", key=f"lg_{srv['id']}"):
