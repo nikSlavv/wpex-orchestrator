@@ -6,6 +6,9 @@ import psycopg2
 import os
 import time
 import requests
+import datetime
+import uuid
+import extra_streamlit_components as stx
 
 # --- CONFIGURAZIONE ---
 IMAGE_NAME = "nikoceps/wpex-monitoring:latest"
@@ -110,6 +113,17 @@ def init_db():
                 id SERIAL PRIMARY KEY,
                 username VARCHAR(50) UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # Tabella Sessioni
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                id SERIAL PRIMARY KEY,
+                user_id INT REFERENCES users(id) ON DELETE CASCADE,
+                token TEXT UNIQUE NOT NULL,
+                expires_at TIMESTAMP NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
@@ -300,6 +314,50 @@ def get_logs(name):
 
 # --- AUTH FUNCTIONS ---
 
+def create_session(user_id):
+    conn = get_db_connection()
+    if conn:
+        try:
+            token = str(uuid.uuid4())
+            expires_at = datetime.datetime.now() + datetime.timedelta(days=7)
+            cur = conn.cursor()
+            cur.execute("INSERT INTO sessions (user_id, token, expires_at) VALUES (%s, %s, %s)", (user_id, token, expires_at))
+            conn.commit()
+            conn.close()
+            return token, expires_at
+        except Exception as e:
+            st.error(f"Errore creazione sessione: {e}")
+            return None, None
+    return None, None
+
+def get_user_from_session(token):
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT u.id, u.username 
+                FROM sessions s 
+                JOIN users u ON s.user_id = u.id 
+                WHERE s.token = %s AND s.expires_at > NOW()
+            """, (token,))
+            user = cur.fetchone()
+            conn.close()
+            if user:
+                return {"id": user[0], "username": user[1]}
+        except: pass
+    return None
+
+def delete_session(token):
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("DELETE FROM sessions WHERE token = %s", (token,))
+            conn.commit()
+            conn.close()
+        except: pass
+
 def create_user(username, password):
     conn = get_db_connection()
     if conn:
@@ -314,6 +372,7 @@ def create_user(username, password):
         except psycopg2.errors.UniqueViolation:
             return False, "Username già esistente."
         except Exception as e:
+            return False, f"Errore creazione utente: {e}"
             return False, f"Errore creazione utente: {e}"
     return False, "Errore connessione DB"
 
@@ -334,7 +393,10 @@ def check_login(username, password):
             return False, None
     return False, None
 
-def login_page():
+    return False, None
+
+# login_page removed as it's now inline
+
     # Stile Moderno / Glassmorphism per la login
     st.markdown("""
     <style>
@@ -420,100 +482,227 @@ if 'db_init' not in st.session_state:
     migrate_db()
     st.session_state['db_init'] = True
 
-# --- UI LAYOUT ---
+# --- COOKIE MANAGER ---
+# Importante: deve essere inizializzato prima di qualsiasi check
+cookie_manager = stx.CookieManager()
+
+# --- SESSION CHECK ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
+    st.session_state['user'] = None
 
+# 1. Controlla se c'è un cookie valido se non siamo ancora loggati
 if not st.session_state['logged_in']:
-    login_page()
-    st.stop()  # Ferma l'esecuzione qui se non loggato
+    cookies = cookie_manager.get_all()
+    session_token = cookies.get("wpex_session")
+    
+    if session_token:
+        user_data = get_user_from_session(session_token)
+        if user_data:
+            st.session_state['logged_in'] = True
+            st.session_state['user'] = user_data
+            st.session_state['username'] = user_data['username']
+            # Se siamo sulla pagina di login, facciamo un redirect pulito alla dashboard
+            if st.query_params.get("page") == "login":
+                 st.query_params["page"] = "dashboard"
+            st.rerun()
+
+# --- LOGIN PAGE WRAPPER ---
+if not st.session_state['logged_in']:
+    # Stile Moderno / Glassmorphism per la login
+    st.markdown("""
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: auto;
+            padding: 2rem;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        div.stButton > button {
+            width: 100%;
+            background-color: #ff4b4b;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        div.stButton > button:hover {
+            background-color: #ff3333;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4);
+        }
+        h1 { text-align: center; margin-bottom: 2rem; }
+    </style>
+    """, unsafe_allow_html=True)
+
+    c1, c2, c3 = st.columns([1, 2, 1])
+    with c2:
+        st.title("🔐 WPEX Login")
+        
+        tab_login, tab_register = st.tabs(["Accedi", "Registrati"])
+        
+        with tab_login:
+            with st.form("login_form"):
+                username = st.text_input("Username")
+                password = st.text_input("Password", type="password")
+                submit = st.form_submit_button("Entra")
+                
+                if submit:
+                    if username and password:
+                        success, user_data = check_login(username, password)
+                        if success:
+                            # 1. Crea Sessione DB
+                            token, expires = create_session(user_data[0])
+                            if token:
+                                # 2. Setta Cookie
+                                cookie_manager.set("wpex_session", token, expires_at=expires)
+                                
+                                st.session_state['logged_in'] = True
+                                st.session_state['username'] = user_data[1]
+                                st.session_state['user'] = {"id": user_data[0], "username": user_data[1]}
+                                st.toast(f"Benvenuto {user_data[1]}!", icon="👋")
+                                time.sleep(0.5)
+                                st.rerun()
+                            else:
+                                st.error("Errore creazione sessione.")
+                        else:
+                            st.error("Credenziali non valide.")
+                    else:
+                        st.warning("Inserisci username e password.")
+
+        with tab_register:
+            with st.form("register_form"):
+                new_user = st.text_input("Nuovo Username")
+                new_pass = st.text_input("Nuova Password", type="password")
+                confirm_pass = st.text_input("Conferma Password", type="password")
+                reg_submit = st.form_submit_button("Crea Account")
+                
+                if reg_submit:
+                    if new_user and new_pass:
+                        if new_pass != confirm_pass:
+                            st.error("Le password non coincidono.")
+                        else:
+                            ok, msg = create_user(new_user, new_pass)
+                            if ok:
+                                st.success(msg)
+                                time.sleep(1)
+                            else:
+                                st.error(msg)
+                    else:
+                        st.warning("Compila tutti i campi.")
+    
+    st.stop()  # Stop se non loggato
 
 # SIDEBAR LOGOUT
 with st.sidebar:
     st.write(f"Utente: **{st.session_state.get('username', 'Admin')}**")
     if st.button("Logout", type="secondary"):
-        st.session_state['logged_in'] = False
+        # 1. Rimuovi sessione dal DB
+        cookies = cookie_manager.get_all()
+        token = cookies.get("wpex_session")
+        if token:
+            delete_session(token)
+        
+        # 2. Rimuovi Cookie
+        cookie_manager.delete("wpex_session")
+        
+        # 3. Pulisci stato
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+            
+        st.query_params["page"] = "login"
         st.rerun()
 
 st.title("🏢 WPEX Multi-Server Orchestrator")
 st.markdown(f"<small>Host IP: `{CURRENT_HOST_IP}`</small>", unsafe_allow_html=True)
 
-tab_servers, tab_keys = st.tabs(["📦 Server & Istanze", "🔐 Database Chiavi"])
+# --- ROUTING NAVIGATOR ---
+# Gestiamo la navigazione tramite query params
+page = st.query_params.get("page", "dashboard")
+server_name_param = st.query_params.get("name", None)
 
-# --- ROUTING LOGIC (Query Params) ---
-query_params = st.query_params
-if "server" in query_params:
-    st.session_state['view_server_name'] = query_params["server"]
-
-# ==========================
-# TAB 1: GESTIONE SERVER
-# ==========================
-with tab_servers:
-    current_view_server = st.session_state.get('view_server_name')
-    if current_view_server:
-        # --- MODALITA' VISUALIZZAZIONE SERVER (Integrated) ---
-        # Troviamo i dati del server dal DB per i controlli
-        all_servers = get_servers_list()
-        srv_data = next((s for s in all_servers if s['name'] == current_view_server.replace("wpex-", "")), None)
-        
-        if not srv_data:
-            st.error(f"Server {current_view_server} non trovato.")
-            if st.button("Torna alla Lista"):
-                st.query_params.clear()
-                st.session_state['view_server_name'] = None
-                st.rerun()
-        else:
-            st.subheader(f"🖥️ Monitor: {current_view_server}")
-            c1, c2 = st.columns([1, 4])
-            if c1.button("⬅️ Lista Server"):
-                st.query_params.clear()
-                st.session_state['view_server_name'] = None
-                st.rerun()
-            
-            # 1. Iframe della GUI (Solo la parte visuale)
-            raw_gui_url = f"/{current_view_server}/"
-            components.iframe(raw_gui_url, height=600, scrolling=True)
-            
-            # 2. Controlli sotto (Integrated)
-            st.divider()
-            st.markdown("### 🛠️ Controlli Integrati")
-            
-            col_info, col_actions = st.columns([2, 1])
-            with col_info:
-                st.write(f"**Status:** {get_docker_status(current_view_server)[0].upper()}")
-                st.caption(f"UDP: {srv_data['udp_port']} | Web (Internal): {srv_data['web_port']}")
-                
-                # Gestione Chiavi rapida
-                all_keys_global = get_all_keys_info()
-                global_key_map = {k['id']: k['alias'] for k in all_keys_global}
-                current_server_key_ids = [k['id'] for k in srv_data['keys']]
-                
-                new_selection = st.multiselect(
-                    "Chiavi assegnate:",
-                    options=global_key_map.keys(),
-                    default=current_server_key_ids,
-                    format_func=lambda x: global_key_map[x],
-                    key=f"ms_view_{srv_data['id']}"
-                )
-                if st.button("Aggiorna e Riavvia", key=f"up_view_{srv_data['id']}"):
-                    new_keys_raw = [k['key'] for k in all_keys_global if k['id'] in new_selection]
-                    if update_server_keys_link(srv_data['id'], new_selection):
-                        deploy_server_docker(srv_data['name'], srv_data['udp_port'], srv_data['web_port'], new_keys_raw)
-                        st.success("Configurazione aggiornata!")
-                        time.sleep(1)
-                        st.rerun()
-
-            with col_actions:
-                st.write("**Azioni Rapide:**")
-                ca1, ca2 = st.columns(2)
-                if ca1.button("▶️ Start", key=f"st_v_{srv_data['id']}"): start_server_docker(srv_data['name']); st.rerun()
-                if ca2.button("⏸️ Stop", key=f"sp_v_{srv_data['id']}"): stop_server_docker(srv_data['name']); st.rerun()
-                
-            if st.checkbox("Mostra Logs", key=f"log_v_{srv_data['id']}"):
-                st.code(get_logs(srv_data['name']))
-
+if page == "server" and server_name_param:
+    # --- VISTA SINGOLA SERVER ---
+    current_view_server = server_name_param
+    
+    # Troviamo i dati del server
+    all_servers = get_servers_list()
+    srv_data = next((s for s in all_servers if s['name'] == current_view_server), None)
+    
+    if not srv_data:
+        st.error(f"Server {current_view_server} non trovato.")
+        if st.button("Torna alla Dashboard"):
+            st.query_params["page"] = "dashboard"
+            st.query_params["name"] = "" # clear
+            st.rerun()
     else:
-        # --- LISTA SERVER (Standard View) ---
+        st.subheader(f"🖥️ Monitor: {current_view_server}")
+        c1, c2 = st.columns([1, 4])
+        if c1.button("⬅️ Dashboard"):
+            st.query_params["page"] = "dashboard"
+            st.query_params["name"] = "" # clear
+            st.rerun()
+        
+        # 1. Iframe della GUI (Solo la parte visuale)
+        # Nota: Qui usiamo il path rewritato da Nginx per l'accesso raw
+        # L'accesso raw è protetto? No, al momento no, ma nginx lo nasconde parzialmente.
+        # Useremo il path interno /wpex-<name>/
+        raw_gui_url = f"/wpex-{current_view_server}/"
+        components.iframe(raw_gui_url, height=600, scrolling=True)
+        
+        # 2. Controlli sotto (Integrated)
+        st.divider()
+        st.markdown("### 🛠️ Controlli Integrati")
+        
+        col_info, col_actions = st.columns([2, 1])
+        with col_info:
+            status, _ = get_docker_status(f"wpex-{current_view_server}") # Fix: aggiungi wpex-
+            st.write(f"**Status:** {status.upper()}")
+            st.caption(f"UDP: {srv_data['udp_port']} | Web (Internal): {srv_data['web_port']}")
+            
+            # Gestione Chiavi rapida
+            all_keys_global = get_all_keys_info()
+            global_key_map = {k['id']: k['alias'] for k in all_keys_global}
+            current_server_key_ids = [k['id'] for k in srv_data['keys']]
+            
+            new_selection = st.multiselect(
+                "Chiavi assegnate:",
+                options=global_key_map.keys(),
+                default=current_server_key_ids,
+                format_func=lambda x: global_key_map[x],
+                key=f"ms_view_{srv_data['id']}"
+            )
+            if st.button("Aggiorna e Riavvia", key=f"up_view_{srv_data['id']}"):
+                new_keys_raw = [k['key'] for k in all_keys_global if k['id'] in new_selection]
+                if update_server_keys_link(srv_data['id'], new_selection):
+                    deploy_server_docker(srv_data['name'], srv_data['udp_port'], srv_data['web_port'], new_keys_raw)
+                    st.success("Configurazione aggiornata!")
+                    time.sleep(1)
+                    st.rerun()
+
+        with col_actions:
+            st.write("**Azioni Rapide:**")
+            ca1, ca2 = st.columns(2)
+            if ca1.button("▶️ Start", key=f"st_v_{srv_data['id']}"): start_server_docker(srv_data['name']); st.rerun()
+            if ca2.button("⏸️ Stop", key=f"sp_v_{srv_data['id']}"): stop_server_docker(srv_data['name']); st.rerun()
+            
+        if st.checkbox("Mostra Logs", key=f"log_v_{srv_data['id']}"):
+            st.code(get_logs(srv_data['name']))
+
+else:
+    # --- DASHBOARD (VIEW PRINCIPALE) ---
+    tab_servers, tab_keys = st.tabs(["📦 Server & Istanze", "🔐 Database Chiavi"])
+    
+    # ==========================
+    # TAB 1: GESTIONE SERVER
+    # ==========================
+    with tab_servers:
         # --- LISTA SERVER ---
         with st.expander("➕ Aggiungi Nuovo Server", expanded=False):
             with st.form("new_server_form", clear_on_submit=True):
@@ -607,8 +796,9 @@ with tab_servers:
                         st.rerun()
                     
                     # Visualizza nel dashboard (Link con Query Param)
-                    if st.button(f"👁️ Visualizza GUI", key=f"view_{srv['id']}"):
-                         st.query_params["server"] = f"wpex-{srv['name']}"
+                    if st.button(f"👁️ Console", key=f"view_{srv['id']}"):
+                         st.query_params["page"] = "server"
+                         st.query_params["name"] = srv['name']
                          st.rerun()
                 
                 if st.checkbox("Logs", key=f"lg_{srv['id']}"):
@@ -616,25 +806,25 @@ with tab_servers:
                 
                 st.write("---")
 
-# ==========================
-# TAB 2: GLOBAL KEYS
-# ==========================
-with tab_keys:
-    st.subheader("Chiavi Globali")
-    with st.form("add_key"):
-        c1, c2 = st.columns([1, 2])
-        alias = c1.text_input("Nome/Alias")
-        k_val = c2.text_input("Chiave", type="password")
-        if st.form_submit_button("Aggiungi"):
-            add_global_key(alias, k_val)
-            st.rerun()
-    
-    st.write("---")
-    keys = get_all_keys_info()
-    for k in keys:
-        c1, c2, c3 = st.columns([2, 4, 1])
-        c1.write(f"**{k['alias']}**")
-        c2.markdown(f'<span class="secret-hover">{k["key"]}</span>', unsafe_allow_html=True)
-        if c3.button("🗑️", key=f"kd_{k['id']}"):
-            delete_global_key(k['id'])
-            st.rerun()
+    # ==========================
+    # TAB 2: GLOBAL KEYS
+    # ==========================
+    with tab_keys:
+        st.subheader("Chiavi Globali")
+        with st.form("add_key"):
+            c1, c2 = st.columns([1, 2])
+            alias = c1.text_input("Nome/Alias")
+            k_val = c2.text_input("Chiave", type="password")
+            if st.form_submit_button("Aggiungi"):
+                add_global_key(alias, k_val)
+                st.rerun()
+        
+        st.write("---")
+        keys = get_all_keys_info()
+        for k in keys:
+            c1, c2, c3 = st.columns([2, 4, 1])
+            c1.write(f"**{k['alias']}**")
+            c2.markdown(f'<span class="secret-hover">{k["key"]}</span>', unsafe_allow_html=True)
+            if c3.button("🗑️", key=f"kd_{k['id']}"):
+                delete_global_key(k['id'])
+                st.rerun()
