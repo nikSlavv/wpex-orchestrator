@@ -490,6 +490,7 @@ cookie_manager = stx.CookieManager()
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['user'] = None
+    st.session_state['session_token'] = None
 
 # 1. Controlla se c'è un cookie valido se non siamo ancora loggati
 if not st.session_state['logged_in']:
@@ -502,6 +503,7 @@ if not st.session_state['logged_in']:
             st.session_state['logged_in'] = True
             st.session_state['user'] = user_data
             st.session_state['username'] = user_data['username']
+            st.session_state['session_token'] = session_token
 
 # --- ROUTING & REDIRECTS ---
 # Se non siamo loggati, l'UNICA pagina accessibile è login
@@ -571,6 +573,7 @@ if not st.session_state['logged_in']:
                                 st.session_state['logged_in'] = True
                                 st.session_state['username'] = user_data[1]
                                 st.session_state['user'] = {"id": user_data[0], "username": user_data[1]}
+                                st.session_state['session_token'] = token
                                 st.toast(f"Benvenuto {user_data[1]}!", icon="👋")
                                 time.sleep(0.5)
                                 # REDIRECT A ROOT DOPO LOGIN
@@ -615,18 +618,21 @@ if page == "login":
 with st.sidebar:
     st.write(f"Utente: **{st.session_state.get('username', 'Admin')}**")
     if st.button("Logout", type="secondary"):
-        # 1. Rimuovi sessione dal DB
-        cookies = cookie_manager.get_all()
-        token = cookies.get("wpex_session")
+        # 1. Rimuovi sessione dal DB usando il token memorizzato
+        token = st.session_state.get('session_token')
         if token:
             delete_session(token)
         
-        # 2. Rimuovi Cookie
-        cookie_manager.delete("wpex_session")
+        # 2. Rimuovi Cookie (tentativo best effort)
+        try:
+            cookie_manager.delete("wpex_session")
+        except: pass
         
         # 3. Pulisci stato
-        for key in list(st.session_state.keys()):
-            del st.session_state[key]
+        st.session_state['logged_in'] = False
+        st.session_state['user'] = None
+        st.session_state['session_token'] = None
+        if 'username' in st.session_state: del st.session_state['username']
             
         # Redirect a Login implicitamente al prossimo rerun
         st.query_params.clear()
