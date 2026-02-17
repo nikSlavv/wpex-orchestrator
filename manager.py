@@ -440,25 +440,80 @@ st.markdown(f"<small>Host IP: `{CURRENT_HOST_IP}`</small>", unsafe_allow_html=Tr
 
 tab_servers, tab_keys = st.tabs(["📦 Server & Istanze", "🔐 Database Chiavi"])
 
+# --- ROUTING LOGIC (Query Params) ---
+query_params = st.query_params
+if "server" in query_params:
+    st.session_state['view_server_name'] = query_params["server"]
+
 # ==========================
 # TAB 1: GESTIONE SERVER
 # ==========================
 with tab_servers:
-    if st.session_state.get('view_server_url'):
-        # --- MODALITA' VISUALIZZAZIONE SERVER ---
-        st.subheader("🖥️ Monitor Server")
-        if st.button("⬅️ Torna alla Lista"):
-            st.session_state['view_server_url'] = None
-            st.rerun()
+    current_view_server = st.session_state.get('view_server_name')
+    if current_view_server:
+        # --- MODALITA' VISUALIZZAZIONE SERVER (Integrated) ---
+        # Troviamo i dati del server dal DB per i controlli
+        all_servers = get_servers_list()
+        srv_data = next((s for s in all_servers if s['name'] == current_view_server.replace("wpex-", "")), None)
         
-        url = st.session_state['view_server_url']
-        st.info(f"Visualizzazione diretta: {url}")
-        
-        # Iframe per vedere la GUI del server
-        # Altezza adattabile
-        components.iframe(url, height=800, scrolling=True)
+        if not srv_data:
+            st.error(f"Server {current_view_server} non trovato.")
+            if st.button("Torna alla Lista"):
+                st.query_params.clear()
+                st.session_state['view_server_name'] = None
+                st.rerun()
+        else:
+            st.subheader(f"🖥️ Monitor: {current_view_server}")
+            c1, c2 = st.columns([1, 4])
+            if c1.button("⬅️ Lista Server"):
+                st.query_params.clear()
+                st.session_state['view_server_name'] = None
+                st.rerun()
+            
+            # 1. Iframe della GUI (Solo la parte visuale)
+            raw_gui_url = f"/{current_view_server}/"
+            components.iframe(raw_gui_url, height=600, scrolling=True)
+            
+            # 2. Controlli sotto (Integrated)
+            st.divider()
+            st.markdown("### 🛠️ Controlli Integrati")
+            
+            col_info, col_actions = st.columns([2, 1])
+            with col_info:
+                st.write(f"**Status:** {get_docker_status(current_view_server)[0].upper()}")
+                st.caption(f"UDP: {srv_data['udp_port']} | Web (Internal): {srv_data['web_port']}")
+                
+                # Gestione Chiavi rapida
+                all_keys_global = get_all_keys_info()
+                global_key_map = {k['id']: k['alias'] for k in all_keys_global}
+                current_server_key_ids = [k['id'] for k in srv_data['keys']]
+                
+                new_selection = st.multiselect(
+                    "Chiavi assegnate:",
+                    options=global_key_map.keys(),
+                    default=current_server_key_ids,
+                    format_func=lambda x: global_key_map[x],
+                    key=f"ms_view_{srv_data['id']}"
+                )
+                if st.button("Aggiorna e Riavvia", key=f"up_view_{srv_data['id']}"):
+                    new_keys_raw = [k['key'] for k in all_keys_global if k['id'] in new_selection]
+                    if update_server_keys_link(srv_data['id'], new_selection):
+                        deploy_server_docker(srv_data['name'], srv_data['udp_port'], srv_data['web_port'], new_keys_raw)
+                        st.success("Configurazione aggiornata!")
+                        time.sleep(1)
+                        st.rerun()
+
+            with col_actions:
+                st.write("**Azioni Rapide:**")
+                ca1, ca2 = st.columns(2)
+                if ca1.button("▶️ Start", key=f"st_v_{srv_data['id']}"): start_server_docker(srv_data['name']); st.rerun()
+                if ca2.button("⏸️ Stop", key=f"sp_v_{srv_data['id']}"): stop_server_docker(srv_data['name']); st.rerun()
+                
+            if st.checkbox("Mostra Logs", key=f"log_v_{srv_data['id']}"):
+                st.code(get_logs(srv_data['name']))
 
     else:
+        # --- LISTA SERVER (Standard View) ---
         # --- LISTA SERVER ---
         with st.expander("➕ Aggiungi Nuovo Server", expanded=False):
             with st.form("new_server_form", clear_on_submit=True):
@@ -552,9 +607,9 @@ with tab_servers:
                     delete_server_db(srv['id'])
                     st.rerun()
                 
-                # Visualizza nel dashboard (IFrame proxato)
+                # Visualizza nel dashboard (Link con Query Param)
                 if st.button(f"👁️ Visualizza GUI", key=f"view_{srv['id']}"):
-                     st.session_state['view_server_url'] = f"/wpex-{srv['name']}/"
+                     st.query_params["server"] = f"wpex-{srv['name']}"
                      st.rerun()
             
             if st.checkbox("Logs", key=f"lg_{srv['id']}"):
