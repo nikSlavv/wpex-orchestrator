@@ -15,13 +15,12 @@ services:
     deploy:
       replicas: 1
 
-  # 2. Manager GUI
+  # 2. Manager GUI (Streamlit)
   manager:
     image: python:3.9-slim
     volumes:
-      # Fondamentale per creare altri servizi
       - /var/run/docker.sock:/var/run/docker.sock
-      - ./manager.py:/app/manager.py
+      - .:/app
     environment:
       DB_HOST: db
       DB_NAME: wpex_keys_db
@@ -31,9 +30,21 @@ services:
       - db_encryption_key
     working_dir: /app
     command: >
-      bash -c "pip install streamlit docker psycopg2-binary && streamlit run manager.py"
+      bash -c "pip install streamlit docker psycopg2-binary && 
+      streamlit run manager.py --server.port 8501 --server.address 0.0.0.0"
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+  # 3. Reverse Proxy (Nginx)
+  nginx:
+    image: nginx:alpine
     ports:
-      - "8501:8501"
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - manager
     deploy:
       placement:
         constraints: [node.role == manager]
