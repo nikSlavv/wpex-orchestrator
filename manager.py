@@ -543,79 +543,78 @@ with tab_servers:
 
         st.divider()
 
+        # --- LISTA SERVER ---
+        servers = get_servers_list()
+        # Serve ricaricare le info globali delle chiavi per i menu di modifica
+        all_keys_global = get_all_keys_info()
+        global_key_map = {k['id']: k['alias'] for k in all_keys_global}
 
-    # --- LISTA SERVER ---
-    servers = get_servers_list()
-    # Serve ricaricare le info globali delle chiavi per i menu di modifica
-    all_keys_global = get_all_keys_info()
-    global_key_map = {k['id']: k['alias'] for k in all_keys_global}
-
-    if not servers: st.info("Nessun server attivo.")
-    
-    for srv in servers:
-        with st.container():
-            status, _ = get_docker_status(f"wpex-{srv['name']}")
-            status_icon = "🟢" if status == "running" else "🔴" if status in ["exited", "stopped"] else "⚪"
-            
-            c_info, c_actions = st.columns([3, 2])
-            
-            # Colonna INFO
-            with c_info:
-                st.markdown(f"### {status_icon} wpex-{srv['name']}")
-                st.caption(f"UDP: **{srv['udp_port']}** | Web: **{srv['web_port']}**")
+        if not servers: st.info("Nessun server attivo.")
+        
+        for srv in servers:
+            with st.container():
+                status, _ = get_docker_status(f"wpex-{srv['name']}")
+                status_icon = "🟢" if status == "running" else "🔴" if status in ["exited", "stopped"] else "⚪"
                 
-                # --- NUOVA SEZIONE: GESTIONE CHIAVI ---
-                with st.expander(f"⚙️ Gestisci Chiavi ({len(srv['keys'])})"):
-                    # 1. Troviamo gli ID delle chiavi attualmente assegnate a questo server
-                    current_server_key_ids = [k['id'] for k in srv['keys']]
-                    
-                    # 2. Multiselect pre-compilato
-                    new_selection = st.multiselect(
-                        "Modifica lista chiavi:",
-                        options=global_key_map.keys(),
-                        default=current_server_key_ids,
-                        format_func=lambda x: global_key_map[x],
-                        key=f"ms_{srv['id']}"
-                    )
-                    
-                    # 3. Pulsante Aggiornamento
-                    if st.button("💾 Salva e Riavvia", key=f"save_{srv['id']}"):
-                        # Aggiorna DB
-                        if update_server_keys_link(srv['id'], new_selection):
-                            # Prepara lista chiavi raw per docker
-                            new_keys_raw = [k['key'] for k in all_keys_global if k['id'] in new_selection]
-                            # Riavvia Docker
-                            deploy_server_docker(srv['name'], srv['udp_port'], srv['web_port'], new_keys_raw)
-                            st.toast("Chiavi aggiornate!", icon="✅")
-                            time.sleep(1)
-                            st.rerun()
-                        else:
-                            st.error("Errore DB durante aggiornamento.")
-
-            # Colonna AZIONI
-            with c_actions:
-                st.write("**Controlli:**")
-                b1, b2, b3 = st.columns(3)
-                if b1.button("▶️", key=f"start_{srv['id']}", disabled=(status=="running")):
-                    start_server_docker(srv['name'])
-                    st.rerun()
-                if b2.button("⏸️", key=f"stop_{srv['id']}", disabled=(status!="running")):
-                    stop_server_docker(srv['name'])
-                    st.rerun()
-                if b3.button("🗑️", key=f"del_{srv['id']}"):
-                    remove_server_docker(srv['name'])
-                    delete_server_db(srv['id'])
-                    st.rerun()
+                c_info, c_actions = st.columns([3, 2])
                 
-                # Visualizza nel dashboard (Link con Query Param)
-                if st.button(f"👁️ Visualizza GUI", key=f"view_{srv['id']}"):
-                     st.query_params["server"] = f"wpex-{srv['name']}"
-                     st.rerun()
-            
-            if st.checkbox("Logs", key=f"lg_{srv['id']}"):
-                st.code(get_logs(srv['name']))
-            
-            st.write("---")
+                # Colonna INFO
+                with c_info:
+                    st.markdown(f"### {status_icon} wpex-{srv['name']}")
+                    st.caption(f"UDP: **{srv['udp_port']}** | Web: **{srv['web_port']}**")
+                    
+                    # --- NUOVA SEZIONE: GESTIONE CHIAVI ---
+                    with st.expander(f"⚙️ Gestisci Chiavi ({len(srv['keys'])})"):
+                        # 1. Troviamo gli ID delle chiavi attualmente assegnate a questo server
+                        current_server_key_ids = [k['id'] for k in srv['keys']]
+                        
+                        # 2. Multiselect pre-compilato
+                        new_selection = st.multiselect(
+                            "Modifica lista chiavi:",
+                            options=global_key_map.keys(),
+                            default=current_server_key_ids,
+                            format_func=lambda x: global_key_map[x],
+                            key=f"ms_{srv['id']}"
+                        )
+                        
+                        # 3. Pulsante Aggiornamento
+                        if st.button("💾 Salva e Riavvia", key=f"save_{srv['id']}"):
+                            # Aggiorna DB
+                            if update_server_keys_link(srv['id'], new_selection):
+                                # Prepara lista chiavi raw per docker
+                                new_keys_raw = [k['key'] for k in all_keys_global if k['id'] in new_selection]
+                                # Riavvia Docker
+                                deploy_server_docker(srv['name'], srv['udp_port'], srv['web_port'], new_keys_raw)
+                                st.toast("Chiavi aggiornate!", icon="✅")
+                                time.sleep(1)
+                                st.rerun()
+                            else:
+                                st.error("Errore DB durante aggiornamento.")
+
+                # Colonna AZIONI
+                with c_actions:
+                    st.write("**Controlli:**")
+                    b1, b2, b3 = st.columns(3)
+                    if b1.button("▶️", key=f"start_{srv['id']}", disabled=(status=="running")):
+                        start_server_docker(srv['name'])
+                        st.rerun()
+                    if b2.button("⏸️", key=f"stop_{srv['id']}", disabled=(status!="running")):
+                        stop_server_docker(srv['name'])
+                        st.rerun()
+                    if b3.button("🗑️", key=f"del_{srv['id']}"):
+                        remove_server_docker(srv['name'])
+                        delete_server_db(srv['id'])
+                        st.rerun()
+                    
+                    # Visualizza nel dashboard (Link con Query Param)
+                    if st.button(f"👁️ Visualizza GUI", key=f"view_{srv['id']}"):
+                         st.query_params["server"] = f"wpex-{srv['name']}"
+                         st.rerun()
+                
+                if st.checkbox("Logs", key=f"lg_{srv['id']}"):
+                    st.code(get_logs(srv['name']))
+                
+                st.write("---")
 
 # ==========================
 # TAB 2: GLOBAL KEYS
