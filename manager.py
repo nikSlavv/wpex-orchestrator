@@ -202,6 +202,17 @@ def delete_server_db(server_id):
         conn.commit()
         conn.close()
 
+def get_next_web_port():
+    conn = get_db_connection()
+    if not conn: return 8080
+    cur = conn.cursor()
+    cur.execute("SELECT MAX(web_port) FROM servers")
+    max_port = cur.fetchone()[0]
+    conn.close()
+    if max_port:
+        return max_port + 1
+    return 8080
+
 def get_servers_list():
     conn = get_db_connection()
     if not conn: return []
@@ -450,10 +461,9 @@ with tab_servers:
         # --- LISTA SERVER ---
         with st.expander("➕ Aggiungi Nuovo Server", expanded=False):
             with st.form("new_server_form", clear_on_submit=True):
-                c1, c2, c3 = st.columns(3)
+                c1, c2 = st.columns(2)
                 srv_name = c1.text_input("Nome Server", placeholder="es. alpha")
                 srv_udp = c2.number_input("Porta UDP", value=40000, step=1)
-                srv_web = c3.number_input("Porta Web", value=8080, step=1)
                 
                 # Carichiamo tutte le chiavi disponibili
                 all_keys_info = get_all_keys_info()
@@ -464,6 +474,7 @@ with tab_servers:
                 if st.form_submit_button("Crea Server"):
                     srv_name = srv_name.lower().replace(" ", "-")
                     if srv_name and selected_ids:
+                        srv_web = get_next_web_port()
                         ok, msg = add_server_db(srv_name, srv_udp, srv_web, selected_ids)
                         if ok:
                             # Estraiamo le chiavi raw per docker
