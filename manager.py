@@ -243,9 +243,10 @@ def deploy_server_docker(name, udp_port, web_port, keys_list):
         cmd_args.extend(["--allow", k])
     if not keys_list: cmd_args.extend(["--allow", "placeholder"])
 
+
     port_bindings = {
-        f'{udp_port}/udp': udp_port,
-        '8080/tcp': web_port
+        f'{udp_port}/udp': udp_port
+        # '8080/tcp': web_port  <-- REMOVED: Internal access only via Nginx
     }
 
     try:
@@ -258,6 +259,7 @@ def deploy_server_docker(name, udp_port, web_port, keys_list):
             name=container_name,
             command=cmd_args,
             ports=port_bindings,
+            network="wpex_net", # Attach to Overlay Network
             restart_policy={"Name": "always"},
             detach=True
         )
@@ -542,7 +544,8 @@ with tab_servers:
                 
                 # Visualizza nel dashboard (IFrame)
                 if st.button(f"👁️ Visualizza GUI", key=f"view_{srv['id']}"):
-                     st.session_state['view_server_url'] = f"http://{CURRENT_HOST_IP}:{srv['web_port']}"
+                     # Use dynamic proxy path: /<server_name>/
+                     st.session_state['view_server_url'] = f"http://{CURRENT_HOST_IP}/{srv['name']}/"
                      st.rerun()
             
             if st.checkbox("Logs", key=f"lg_{srv['id']}"):
