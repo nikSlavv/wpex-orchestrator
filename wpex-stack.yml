@@ -32,9 +32,21 @@ services:
     working_dir: /app
     command: >
       bash -c "pip install streamlit docker psycopg2-binary && streamlit run manager.py"
-    ports:
-      - "8501:8501"
     deploy:
+      placement:
+        constraints: [node.role == manager]
+
+  # 3. Nginx Reverse Proxy
+  nginx:
+    image: nginx:latest
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - manager
+    deploy:
+      replicas: 1
       placement:
         constraints: [node.role == manager]
 
