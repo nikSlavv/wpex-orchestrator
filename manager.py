@@ -502,13 +502,18 @@ if not st.session_state['logged_in']:
             st.session_state['logged_in'] = True
             st.session_state['user'] = user_data
             st.session_state['username'] = user_data['username']
-            # Se siamo sulla pagina di login, facciamo un redirect pulito alla dashboard
-            if st.query_params.get("page") == "login":
-                 st.query_params["page"] = "dashboard"
-            st.rerun()
 
-# --- LOGIN PAGE WRAPPER ---
+# --- ROUTING & REDIRECTS ---
+# Se non siamo loggati, l'UNICA pagina accessibile è login
+page = st.query_params.get("page", "dashboard")
+
 if not st.session_state['logged_in']:
+    # Se la pagina corrente NON è login, forza redirect
+    if page != "login":
+        st.query_params["page"] = "login"
+        st.rerun()
+        
+    # --- LOGIN PAGE WRAPPER ---
     # Stile Moderno / Glassmorphism per la login
     st.markdown("""
     <style>
@@ -568,6 +573,8 @@ if not st.session_state['logged_in']:
                                 st.session_state['user'] = {"id": user_data[0], "username": user_data[1]}
                                 st.toast(f"Benvenuto {user_data[1]}!", icon="👋")
                                 time.sleep(0.5)
+                                # REDIRECT A ROOT DOPO LOGIN
+                                st.query_params.clear()
                                 st.rerun()
                             else:
                                 st.error("Errore creazione sessione.")
@@ -599,6 +606,11 @@ if not st.session_state['logged_in']:
     
     st.stop()  # Stop se non loggato
 
+# SE SIAMO LOGGATI MA SIAMO SU ?page=login, redirect a root
+if page == "login":
+    st.query_params.clear()
+    st.rerun()
+
 # SIDEBAR LOGOUT
 with st.sidebar:
     st.write(f"Utente: **{st.session_state.get('username', 'Admin')}**")
@@ -616,7 +628,8 @@ with st.sidebar:
         for key in list(st.session_state.keys()):
             del st.session_state[key]
             
-        st.query_params["page"] = "login"
+        # Redirect a Login implicitamente al prossimo rerun
+        st.query_params.clear()
         st.rerun()
 
 st.title("🏢 WPEX Multi-Server Orchestrator")
@@ -624,7 +637,8 @@ st.markdown(f"<small>Host IP: `{CURRENT_HOST_IP}`</small>", unsafe_allow_html=Tr
 
 # --- ROUTING NAVIGATOR ---
 # Gestiamo la navigazione tramite query params
-page = st.query_params.get("page", "dashboard")
+# Page è già stato letto sopra
+
 server_name_param = st.query_params.get("name", None)
 
 if page == "server" and server_name_param:
@@ -638,15 +652,13 @@ if page == "server" and server_name_param:
     if not srv_data:
         st.error(f"Server {current_view_server} non trovato.")
         if st.button("Torna alla Dashboard"):
-            st.query_params["page"] = "dashboard"
-            st.query_params["name"] = "" # clear
+            st.query_params.clear()
             st.rerun()
     else:
         st.subheader(f"🖥️ Monitor: {current_view_server}")
         c1, c2 = st.columns([1, 4])
         if c1.button("⬅️ Dashboard"):
-            st.query_params["page"] = "dashboard"
-            st.query_params["name"] = "" # clear
+            st.query_params.clear()
             st.rerun()
         
         # 1. Iframe della GUI (Solo la parte visuale)
