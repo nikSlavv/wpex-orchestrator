@@ -394,13 +394,35 @@ def check_login(username, password):
     return False, None
 
 
-# --- INIT ---
+# --- ROUTING (check BEFORE auth for public pages) ---
+page = st.query_params.get("page", "landing")
+
+# ── LANDING PAGE: render immediately, no auth needed ──
+if page in ("landing", "dashboard") and not st.session_state.get('logged_in', False):
+    st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+    
+    # Hero section (title, badge, subtitle)
+    components.html(LANDING_HTML, height=310, scrolling=False)
+    
+    # Real Streamlit CTA button
+    _s1, _cta, _s2 = st.columns([1, 1, 1])
+    with _cta:
+        if st.button("Get Started", key="cta_landing", type="primary", use_container_width=True):
+            st.query_params["page"] = "login"
+            st.rerun()
+    
+    # Feature cards + footer
+    components.html(LANDING_CARDS_HTML, height=350, scrolling=False)
+    
+    st.stop()
+
+# --- INIT (only runs for auth pages, after landing fast-path) ---
 if 'db_init' not in st.session_state:
     init_db()
     migrate_db()
     st.session_state['db_init'] = True
 
-# --- COOKIE MANAGER ---
+# --- COOKIE MANAGER (only needed for auth pages) ---
 cookie_manager = stx.CookieManager(key="wpex_cookie_mgr")
 
 # --- SESSION CHECK ---
@@ -433,9 +455,9 @@ if not st.session_state['logged_in']:
                 st.rerun()
         
         retry_count = st.session_state.get('auth_retries', 0)
-        if retry_count < 5:
+        if retry_count < 2:
              st.session_state['auth_retries'] = retry_count + 1
-             time.sleep(0.5)
+             time.sleep(0.2)
              st.rerun()
              
         st.session_state['auth_checked'] = True
@@ -444,31 +466,10 @@ if not st.session_state['logged_in']:
 page = st.query_params.get("page", "dashboard")
 
 if not st.session_state['logged_in']:
-    if not st.session_state.get('auth_checked', False):
-        with st.spinner("Checking authentication..."):
-            time.sleep(1)
-            st.rerun()
-
-    # ── LANDING PAGE (default for non-logged users) ──
+    # Redirect non-authenticated users to landing (not login/landing already handled above)
     if st.session_state.get('auth_checked', False) and page not in ("login", "landing"):
         st.query_params["page"] = "landing"
         st.rerun()
-
-    if page == "landing" or page == "dashboard":
-        # Hero section (title, badge, subtitle)
-        components.html(LANDING_HTML, height=310, scrolling=False)
-        
-        # Real Streamlit CTA button (iframe sandbox blocks all navigation)
-        _s1, _cta, _s2 = st.columns([1, 1, 1])
-        with _cta:
-            if st.button("Get Started", key="cta_landing", type="primary", use_container_width=True):
-                st.query_params["page"] = "login"
-                st.rerun()
-        
-        # Feature cards + footer
-        components.html(LANDING_CARDS_HTML, height=350, scrolling=False)
-        
-        st.stop()
 
     # ── LOGIN PAGE ──
     if page == "login":
