@@ -36,8 +36,18 @@ class UpdateKeysRequest(BaseModel):
 
 
 # --- Docker Helpers ---
+def _get_docker_client():
+    """Get Docker client, return None if Docker is unavailable."""
+    try:
+        return docker.from_env()
+    except Exception:
+        return None
+
+
 def _docker_status(container_name: str):
-    client = docker.from_env()
+    client = _get_docker_client()
+    if not client:
+        return "error"
     try:
         c = client.containers.get(container_name)
         return c.status
@@ -47,8 +57,11 @@ def _docker_status(container_name: str):
         return "error"
 
 
+
 def _deploy_container(name, udp_port, web_port, keys_list):
-    client = docker.from_env()
+    client = _get_docker_client()
+    if not client:
+        return False, "Docker non disponibile"
     container_name = f"wpex-{name}"
     
     cmd_args = ["--stats", ":8080"]
@@ -61,8 +74,8 @@ def _deploy_container(name, udp_port, web_port, keys_list):
 
     try:
         status = _docker_status(container_name)
-        if status != "not_created":
-            docker.from_env().containers.get(container_name).remove(force=True)
+        if status != "not_created" and client:
+            client.containers.get(container_name).remove(force=True)
 
         client.containers.run(
             image=IMAGE_NAME,
@@ -152,10 +165,12 @@ def delete_server(server_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Server non trovato")
     
     name = row[0]
-    try:
-        docker.from_env().containers.get(f"wpex-{name}").remove(force=True)
-    except:
-        pass
+    client = _get_docker_client()
+    if client:
+        try:
+            client.containers.get(f"wpex-{name}").remove(force=True)
+        except:
+            pass
     
     cur.execute("DELETE FROM servers WHERE id = %s", (server_id,))
     conn.commit()
@@ -172,10 +187,12 @@ def start_server(server_id: int, user=Depends(get_current_user)):
     conn.close()
     if not row:
         raise HTTPException(status_code=404)
-    try:
-        docker.from_env().containers.get(f"wpex-{row[0]}").start()
-    except:
-        pass
+    client = _get_docker_client()
+    if client:
+        try:
+            client.containers.get(f"wpex-{row[0]}").start()
+        except:
+            pass
     return {"message": "Avviato"}
 
 
@@ -188,10 +205,12 @@ def stop_server(server_id: int, user=Depends(get_current_user)):
     conn.close()
     if not row:
         raise HTTPException(status_code=404)
-    try:
-        docker.from_env().containers.get(f"wpex-{row[0]}").stop()
-    except:
-        pass
+    client = _get_docker_client()
+    if client:
+        try:
+            client.containers.get(f"wpex-{row[0]}").stop()
+        except:
+            pass
     return {"message": "Fermato"}
 
 
@@ -233,8 +252,11 @@ def get_logs(server_id: int, user=Depends(get_current_user)):
     conn.close()
     if not row:
         raise HTTPException(status_code=404)
+    client = _get_docker_client()
+    if not client:
+        return {"logs": "Docker non disponibile."}
     try:
-        logs = docker.from_env().containers.get(f"wpex-{row[0]}").logs(
+        logs = client.containers.get(f"wpex-{row[0]}").logs(
             tail=30, timestamps=True
         ).decode("utf-8", errors="ignore")
         return {"logs": logs}
