@@ -488,6 +488,7 @@ cookie_manager = stx.CookieManager()
 
 # --- SESSION CHECK ---
 # --- SESSION CHECK ---
+# Init session vars
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['user'] = None
@@ -498,31 +499,49 @@ if 'logged_in' not in st.session_state:
 if not st.session_state['logged_in']:
     cookies = cookie_manager.get_all()
     
-    # Se i cookies non sono ancora pronti, aspettiamo
-    if cookies is None:
-        st.stop()
+    # Se non abbiamo ancora controllato e i cookies sembrano vuoti (o nulli),
+    # potenzialmente stanno ancora caricando.
+    if not st.session_state['auth_checked']:
+        # Se i cookies sono None, stx non è pronto.
+        if cookies is None:
+            st.stop()
         
-    session_token = cookies.get("wpex_session")
-    
-    if session_token:
-        user_data = get_user_from_session(session_token)
-        if user_data:
-            st.session_state['logged_in'] = True
-            st.session_state['user'] = user_data
-            st.session_state['username'] = user_data['username']
-            st.session_state['session_token'] = session_token
-            st.session_state['auth_checked'] = True
-            # Se siamo sulla pagina di login, facciamo un redirect pulito alla dashboard
-            if st.query_params.get("page") == "login":
-                 st.query_params["page"] = "dashboard"
+        # Se i cookies sono {}, proviamo a dare un tick in più?
+        # Non possiamo distinguere tra "nessun cookie" e "non ancora caricato" facilmente se è {}.
+        # Ma stx di solito aggiorna. Se i cookies sono {}, proviamo a cercare il token.
+        session_token = cookies.get("wpex_session")
+        
+        if session_token:
+            user_data = get_user_from_session(session_token)
+            if user_data:
+                st.session_state['logged_in'] = True
+                st.session_state['user'] = user_data
+                st.session_state['username'] = user_data['username']
+                st.session_state['session_token'] = session_token
+                st.session_state['auth_checked'] = True
+                
+                # Se siamo sulla pagina di login, facciamo un redirect pulito alla dashboard
+                if st.query_params.get("page") == "login":
+                     st.query_params["page"] = "dashboard"
+                st.rerun()
+        
+        # Se non abbiamo trovato nulla, segniamo come controllato MA forziamo un rerun
+        # per essere SICURI che stx abbia finito il sync (spesso serve un roundtrip).
+        if not st.session_state.get('auth_retry', False):
+            st.session_state['auth_retry'] = True
+            time.sleep(0.2) # Breve attesa per dare tempo al frontend
             st.rerun()
             
-    st.session_state['auth_checked'] = True
+        st.session_state['auth_checked'] = True
 # --- ROUTING & REDIRECTS ---
 # Se non siamo loggati, l'UNICA pagina accessibile è login
 page = st.query_params.get("page", "dashboard")
 
 if not st.session_state['logged_in']:
+    # Se NON abbiamo ancora finito i check di auth, NON mostriamo nulla (o spinner)
+    if not st.session_state.get('auth_checked', False):
+        st.stop()
+
     # Se la pagina corrente NON è login, forza redirect
     if page != "login":
         st.query_params["page"] = "login"
