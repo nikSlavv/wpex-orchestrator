@@ -443,7 +443,7 @@ def create_jwt_token(user_id, username):
         jti = str(uuid.uuid4())
         
         payload = {
-            "sub": user_id,
+            "sub": str(user_id),
             "name": username,
             "exp": expiration,
             "jti": jti
@@ -506,7 +506,7 @@ def get_user_from_session(token):
     # In JWT mode, "session" is the token itself
     payload = verify_jwt_token(token)
     if payload:
-        return {"id": payload['sub'], "username": payload['name']}
+        return {"id": int(payload['sub']), "username": payload['name']}
     return None
 
 def delete_session(token):
