@@ -576,6 +576,7 @@ if 'logged_in' not in st.session_state:
 # 1. Controlla se c'è un cookie valido se non siamo ancora loggati
 if not st.session_state['logged_in']:
     cookies = cookie_manager.get_all()
+    # st.write(f"DEBUG COOKIES: {cookies}") # Decommentare per debug a video
     
     # Se non abbiamo ancora controllato
     if not st.session_state['auth_checked']:
@@ -618,10 +619,13 @@ page = st.query_params.get("page", "dashboard")
 if not st.session_state['logged_in']:
     # Se NON abbiamo ancora finito i check di auth, NON mostriamo nulla (o spinner)
     if not st.session_state.get('auth_checked', False):
-        st.stop()
-
-    # Se la pagina corrente NON è login, forza redirect
-    if page != "login":
+        # Se siamo in fase di check, NON fare redirect. Aspetta.
+        with st.spinner("Checking authentication..."):
+            time.sleep(1) # Dai tempo al cookie manager
+            st.rerun()
+            
+    # Se la pagina corrente NON è login e siamo sicuri di non essere loggati
+    if st.session_state.get('auth_checked', False) and page != "login":
         st.query_params["page"] = "login"
         st.rerun()
         
