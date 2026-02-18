@@ -11,6 +11,8 @@ import uuid
 import extra_streamlit_components as stx
 import jwt
 
+from style import GLOBAL_CSS, LANDING_HTML, icon, status_dot
+
 # --- CONFIGURAZIONE ---
 IMAGE_NAME = "nikoceps/wpex-monitoring:latest"
 
@@ -23,10 +25,8 @@ def get_secret(secret_name, default=None):
         return default
 
 # --- JWT CONFIG ---
-# Usa prima Docker Secret, poi Env Var, poi Fallback
 JWT_SECRET = get_secret("jwt_secret")
 if not JWT_SECRET:
-    # 32+ chars fallback
     JWT_SECRET = os.getenv("JWT_SECRET", "changeme_super_long_fallback_secret_key_32bytes_minimum")
 
 JWT_ALGORITHM = "HS256"
@@ -35,47 +35,13 @@ JWT_EXP_DAYS = 7
 # Tenta di ottenere l'IP pubblico per i link
 def get_public_ip():
     try:
-        # Timeout breve per non bloccare l'app se offline
         return os.getenv("HOST_IP", requests.get('https://api.ipify.org', timeout=1).text)
     except:
         return "localhost"
 
 CURRENT_HOST_IP = get_public_ip()
 
-# --- CSS CUSTOM ---
-st.markdown("""
-<style>
-    .secret-hover {
-        background-color: #333;
-        color: #333; 
-        border-radius: 4px;
-        padding: 5px 10px;
-        font-family: monospace;
-        transition: all 0.2s ease-in-out;
-        cursor: text;
-        user-select: all; 
-        border: 1px solid #444;
-    }
-    .secret-hover:hover {
-        background-color: #222;
-        color: #0f0; 
-        border-color: #0f0;
-    }
-    /* Riduciamo spaziatura expander */
-    .streamlit-expanderHeader {
-        font-size: 0.9em;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-# --- GESTIONE SECRETS ---
-def get_secret(secret_name, default=None):
-    try:
-        with open(f"/run/secrets/{secret_name}", "r") as f:
-            return f.read().strip()
-    except IOError:
-        return default
-
+# --- CONFIG DB ---
 DB_HOST = os.getenv("DB_HOST", "db")
 DB_NAME = os.getenv("DB_NAME", "wpex_keys_db")
 DB_USER = os.getenv("DB_USER", "wpex_admin")
@@ -83,15 +49,18 @@ DB_PASS = get_secret("db_password", "admin")
 DATA_KEY = get_secret("db_encryption_key", "mysecretkey")
 WPEX_NETWORK = os.getenv("WPEX_NETWORK", "wpex_wpex-network")
 
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="WPEX Orchestrator", page_icon="⚡", layout="wide")
 
-st.set_page_config(page_title="WPEX Orchestrator", page_icon="🏢", layout="wide")
+# --- INJECT GLOBAL CSS ---
+st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 # --- DATABASE LAYER ---
 def get_db_connection():
     try:
         return psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
     except Exception as e:
-        st.toast(f"❌ Errore DB: {e}", icon="🔥")
+        st.toast(f"Errore DB: {e}")
         return None
 
 def init_db():
@@ -127,7 +96,6 @@ def init_db():
             );
         """)
 
-        # Tabella Utenti per Login
         cur.execute("""
             CREATE TABLE IF NOT EXISTS users (
                 id SERIAL PRIMARY KEY,
@@ -137,110 +105,9 @@ def init_db():
             );
         """)
 
-        # Tabella Blacklist Token (Logout) - SOSTITUISCE SESSIONS
         cur.execute("""
             CREATE TABLE IF NOT EXISTS token_blacklist (
                 jti VARCHAR(36) PRIMARY KEY,
-                expires_at TIMESTAMP NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        
-        conn.commit()
-        conn.close()
-
-# --- CSS CUSTOM ---
-st.markdown("""
-<style>
-    .secret-hover {
-        background-color: #333;
-        color: #333; 
-        border-radius: 4px;
-        padding: 5px 10px;
-        font-family: monospace;
-        transition: all 0.2s ease-in-out;
-        cursor: text;
-        user-select: all; 
-        border: 1px solid #444;
-    }
-    .secret-hover:hover {
-        background-color: #222;
-        color: #0f0; 
-        border-color: #0f0;
-    }
-    /* Riduciamo spaziatura expander */
-    .streamlit-expanderHeader {
-        font-size: 0.9em;
-    }
-</style>
-""", unsafe_allow_html=True)
-
-DB_HOST = os.getenv("DB_HOST", "db")
-DB_NAME = os.getenv("DB_NAME", "wpex_keys_db")
-DB_USER = os.getenv("DB_USER", "wpex_admin")
-DB_PASS = get_secret("db_password", "admin")
-DATA_KEY = get_secret("db_encryption_key", "mysecretkey")
-WPEX_NETWORK = os.getenv("WPEX_NETWORK", "wpex_wpex-network")
-
-st.set_page_config(page_title="WPEX Orchestrator", page_icon="🏢", layout="wide")
-
-# --- DATABASE LAYER ---
-def get_db_connection():
-    try:
-        return psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
-    except Exception as e:
-        st.toast(f"❌ Errore DB: {e}", icon="🔥")
-        return None
-
-def init_db():
-    conn = get_db_connection()
-    if conn:
-        cur = conn.cursor()
-        cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
-        
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS access_keys (
-                id SERIAL PRIMARY KEY,
-                alias VARCHAR(50), 
-                key_value BYTEA NOT NULL, 
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS servers (
-                id SERIAL PRIMARY KEY,
-                name VARCHAR(50) UNIQUE NOT NULL,
-                port INT UNIQUE NOT NULL,
-                web_port INT UNIQUE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-        
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS server_keys_link (
-                server_id INT REFERENCES servers(id) ON DELETE CASCADE,
-                key_id INT REFERENCES access_keys(id) ON DELETE CASCADE,
-                PRIMARY KEY (server_id, key_id)
-            );
-        """)
-
-        # Tabella Utenti per Login
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS users (
-                id SERIAL PRIMARY KEY,
-                username VARCHAR(50) UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        # Tabella Sessioni
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS sessions (
-                id SERIAL PRIMARY KEY,
-                user_id INT REFERENCES users(id) ON DELETE CASCADE,
-                token TEXT UNIQUE NOT NULL,
                 expires_at TIMESTAMP NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
@@ -316,9 +183,7 @@ def update_server_keys_link(server_id, new_key_ids):
     if conn:
         try:
             cur = conn.cursor()
-            # 1. Rimuovi vecchi link
             cur.execute("DELETE FROM server_keys_link WHERE server_id = %s", (server_id,))
-            # 2. Aggiungi nuovi link
             for kid in new_key_ids:
                 cur.execute("INSERT INTO server_keys_link (server_id, key_id) VALUES (%s, %s)", (server_id, kid))
             conn.commit()
@@ -354,14 +219,12 @@ def get_servers_list():
     servers = []
     for row in cur.fetchall():
         sid, name, udp_port, web_port = row
-        # Ora prendiamo anche ID e Alias delle chiavi per la GUI di modifica
         cur.execute("""
             SELECT k.id, k.alias, pgp_sym_decrypt(k.key_value, %s) 
             FROM access_keys k 
             JOIN server_keys_link l ON k.id = l.key_id 
             WHERE l.server_id = %s
         """, (DATA_KEY, sid))
-        # Salviamo la lista di dizionari invece che solo stringhe
         keys_data = [{"id": k[0], "alias": k[1], "key": k[2]} for k in cur.fetchall()]
         servers.append({"id": sid, "name": name, "udp_port": udp_port, "web_port": web_port, "keys": keys_data})
     conn.close()
@@ -464,13 +327,9 @@ def is_token_blacklisted(jti):
 
 def verify_jwt_token(token):
     try:
-        # Decode and verify
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        
-        # Check Blacklist
         if is_token_blacklisted(payload['jti']):
             return None
-            
         return payload
     except jwt.ExpiredSignatureError:
         return None
@@ -483,7 +342,6 @@ def blacklist_token(jti, exp_timestamp):
     conn = get_db_connection()
     if conn:
         try:
-            # Convert timestamp to datetime
             expires_at = datetime.datetime.fromtimestamp(exp_timestamp)
             cur = conn.cursor()
             cur.execute("INSERT INTO token_blacklist (jti, expires_at) VALUES (%s, %s)", (jti, expires_at))
@@ -491,18 +349,13 @@ def blacklist_token(jti, exp_timestamp):
             conn.close()
         except: pass
 
-# (create_session RIMOSSA)
-
 def get_user_from_session(token):
-    # In JWT mode, "session" is the token itself
     payload = verify_jwt_token(token)
     if payload:
         return {"id": int(payload['sub']), "username": payload['name']}
     return None
 
 def delete_session(token):
-    # In JWT mode, we blacklist the token
-    # We need to decode it first to get jti/exp
     try:
         payload = jwt.decode(token, options={"verify_signature": False})
         blacklist_token(payload['jti'], payload['exp'])
@@ -513,7 +366,6 @@ def create_user(username, password):
     if conn:
         try:
             cur = conn.cursor()
-            # Usa pgcrypto per l'hashing sicuro direttamente nel DB
             cur.execute("INSERT INTO users (username, password_hash) VALUES (%s, crypt(%s, gen_salt('bf')));", 
                         (username, password))
             conn.commit()
@@ -530,7 +382,6 @@ def check_login(username, password):
     if conn:
         try:
             cur = conn.cursor()
-            # Verifica password con crypt
             cur.execute("SELECT id, username FROM users WHERE username = %s AND password_hash = crypt(%s, password_hash);", 
                         (username, password))
             user = cur.fetchone()
@@ -543,8 +394,6 @@ def check_login(username, password):
     return False, None
 
 
-
-
 # --- INIT ---
 if 'db_init' not in st.session_state:
     init_db()
@@ -552,25 +401,19 @@ if 'db_init' not in st.session_state:
     st.session_state['db_init'] = True
 
 # --- COOKIE MANAGER ---
-# Importante: deve essere inizializzato prima di qualsiasi check
 cookie_manager = stx.CookieManager(key="wpex_cookie_mgr")
 
 # --- SESSION CHECK ---
-# --- SESSION CHECK ---
-# Init session vars
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['user'] = None
     st.session_state['session_token'] = None
     st.session_state['auth_checked'] = False
 
-# 1. Controlla se c'è un cookie valido se non siamo ancora loggati
 if not st.session_state['logged_in']:
     cookies = cookie_manager.get_all()
     
-    # Se non abbiamo ancora controllato
     if not st.session_state['auth_checked']:
-        # Se i cookies sono None, stx non è pronto.
         if cookies is None:
             st.stop()
         
@@ -585,209 +428,174 @@ if not st.session_state['logged_in']:
                 st.session_state['session_token'] = session_token
                 st.session_state['auth_checked'] = True
                 
-                # Se siamo sulla pagina di login, facciamo un redirect pulito alla dashboard
                 if st.query_params.get("page") == "login":
                      st.query_params["page"] = "dashboard"
                 st.rerun()
         
-        # Se non abbiamo trovato nulla, dobbiamo essere SICURI che non sia un ritardo di caricamento.
-        # Proviamo a fare 5 tentativi di rerun prima di arrenderci (incognito/slow network)
         retry_count = st.session_state.get('auth_retries', 0)
         if retry_count < 5:
              st.session_state['auth_retries'] = retry_count + 1
              time.sleep(0.5)
              st.rerun()
              
-        # Se siamo arrivati qui dopo i retry, allora NON siamo loggati davvero.
         st.session_state['auth_checked'] = True
+
 # --- ROUTING & REDIRECTS ---
-# Se non siamo loggati, l'UNICA pagina accessibile è login
 page = st.query_params.get("page", "dashboard")
 
 if not st.session_state['logged_in']:
-    # Se NON abbiamo ancora finito i check di auth, NON mostriamo nulla (o spinner)
     if not st.session_state.get('auth_checked', False):
-        # Se siamo in fase di check, NON fare redirect. Aspetta.
         with st.spinner("Checking authentication..."):
-            time.sleep(1) # Dai tempo al cookie manager
+            time.sleep(1)
             st.rerun()
-            
-    # Se la pagina corrente NON è login e siamo sicuri di non essere loggati
-    if st.session_state.get('auth_checked', False) and page != "login":
-        st.query_params["page"] = "login"
+
+    # ── LANDING PAGE (default for non-logged users) ──
+    if st.session_state.get('auth_checked', False) and page not in ("login", "landing"):
+        st.query_params["page"] = "landing"
         st.rerun()
-        
-    # --- LOGIN PAGE WRAPPER ---
-    # Stile Moderno / Glassmorphism per la login
-    st.markdown("""
-    <style>
-        .login-container {
-            max-width: 400px;
-            margin: auto;
-            padding: 2rem;
-            border-radius: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
-        }
-        div.stButton > button {
-            width: 100%;
-            background-color: #ff4b4b;
-            color: white;
-            border: none;
-            padding: 0.5rem 1rem;
-            border-radius: 8px;
-            font-weight: bold;
-            transition: all 0.3s ease;
-        }
-        div.stButton > button:hover {
-            background-color: #ff3333;
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(255, 75, 75, 0.4);
-        }
-        h1 { text-align: center; margin-bottom: 2rem; }
-    </style>
-    """, unsafe_allow_html=True)
 
-    c1, c2, c3 = st.columns([1, 2, 1])
-    with c2:
-        st.title("🔐 WPEX Login")
+    if page == "landing" or page == "dashboard":
+        # Show landing page
+        st.markdown(LANDING_HTML, unsafe_allow_html=True)
         
-        tab_login, tab_register = st.tabs(["Accedi", "Registrati"])
+        _spacer1, _cta_col, _spacer2 = st.columns([1, 1, 1])
+        with _cta_col:
+            if st.button("Get Started", key="cta_landing", type="primary", use_container_width=True):
+                st.query_params["page"] = "login"
+                st.rerun()
         
-        with tab_login:
-            with st.form("login_form"):
-                username = st.text_input("Username")
-                password = st.text_input("Password", type="password")
-                submit = st.form_submit_button("Entra")
-                
-                if submit:
-                    if username and password:
-                        success, user_data = check_login(username, password)
-                        if success:
-                            # 1. Crea JWT Token
-                            token, expires = create_jwt_token(user_data[0], user_data[1])
-                            if token:
-                                # 2. Setta Cookie
-                                cookie_manager.set("wpex_session", token, expires_at=expires)
-                                
-                                st.session_state['logged_in'] = True
-                                st.session_state['username'] = user_data[1]
-                                st.session_state['user'] = {"id": user_data[0], "username": user_data[1]}
-                                st.session_state['session_token'] = token
-                                st.toast(f"Benvenuto {user_data[1]}!", icon="👋")
-                                time.sleep(0.5) # Ritardo ottimizzato
-                                # REDIRECT A ROOT DOPO LOGIN
-                                st.query_params.clear()
-                                st.rerun()
-                            else:
-                                st.error("Errore creazione token.")
-                        else:
-                            st.error("Credenziali non valide.")
-                    else:
-                        st.warning("Inserisci username e password.")
+        st.stop()
 
-        with tab_register:
-            with st.form("register_form"):
-                new_user = st.text_input("Nuovo Username")
-                new_pass = st.text_input("Nuova Password", type="password")
-                confirm_pass = st.text_input("Conferma Password", type="password")
-                reg_submit = st.form_submit_button("Crea Account")
-                
-                if reg_submit:
-                    if new_user and new_pass:
-                        if new_pass != confirm_pass:
-                            st.error("Le password non coincidono.")
-                        else:
-                            ok, msg = create_user(new_user, new_pass)
-                            if ok:
-                                st.success(msg)
-                                time.sleep(1)
+    # ── LOGIN PAGE ──
+    if page == "login":
+        c1, c2, c3 = st.columns([1, 2, 1])
+        with c2:
+            st.markdown(f'<div class="login-title">{icon("lock")} WPEX Login</div>', unsafe_allow_html=True)
+            st.markdown('<div class="login-subtitle">Accedi alla dashboard di gestione</div>', unsafe_allow_html=True)
+            
+            tab_login, tab_register = st.tabs([f"Accedi", f"Registrati"])
+            
+            with tab_login:
+                with st.form("login_form"):
+                    username = st.text_input("Username")
+                    password = st.text_input("Password", type="password")
+                    submit = st.form_submit_button("Entra")
+                    
+                    if submit:
+                        if username and password:
+                            success, user_data = check_login(username, password)
+                            if success:
+                                token, expires = create_jwt_token(user_data[0], user_data[1])
+                                if token:
+                                    cookie_manager.set("wpex_session", token, expires_at=expires)
+                                    
+                                    st.session_state['logged_in'] = True
+                                    st.session_state['username'] = user_data[1]
+                                    st.session_state['user'] = {"id": user_data[0], "username": user_data[1]}
+                                    st.session_state['session_token'] = token
+                                    st.toast(f"Benvenuto {user_data[1]}!")
+                                    time.sleep(0.5)
+                                    st.query_params.clear()
+                                    st.rerun()
+                                else:
+                                    st.error("Errore creazione token.")
                             else:
-                                st.error(msg)
-                    else:
-                        st.warning("Compila tutti i campi.")
+                                st.error("Credenziali non valide.")
+                        else:
+                            st.warning("Inserisci username e password.")
+
+            with tab_register:
+                with st.form("register_form"):
+                    new_user = st.text_input("Nuovo Username")
+                    new_pass = st.text_input("Nuova Password", type="password")
+                    confirm_pass = st.text_input("Conferma Password", type="password")
+                    reg_submit = st.form_submit_button("Crea Account")
+                    
+                    if reg_submit:
+                        if new_user and new_pass:
+                            if new_pass != confirm_pass:
+                                st.error("Le password non coincidono.")
+                            else:
+                                ok, msg = create_user(new_user, new_pass)
+                                if ok:
+                                    st.success(msg)
+                                    time.sleep(1)
+                                else:
+                                    st.error(msg)
+                        else:
+                            st.warning("Compila tutti i campi.")
     
-    # Se non siamo loggati e stiamo renderizzando il form, fermiamo qui l'esecuzione
-    # SE siamo appena loggati (rerun), questo blocco non viene raggiunto o st.stop viene saltato
     if not st.session_state['logged_in']:
         st.stop()
 
-# SE SIAMO LOGGATI MA SIAMO SU ?page=login, redirect a root
-if page == "login":
+# SE SIAMO LOGGATI MA SIAMO SU ?page=login o landing, redirect a root
+if page in ("login", "landing"):
     st.query_params.clear()
     st.rerun()
 
-# SIDEBAR LOGOUT
+# ── SIDEBAR ──
 with st.sidebar:
-    st.write(f"Utente: **{st.session_state.get('username', 'Admin')}**")
-    if st.button("Logout", type="secondary"):
-        # 1. Rimuovi sessione dal DB usando il token memorizzato
+    st.markdown(f'{icon("user")} **{st.session_state.get("username", "Admin")}**', unsafe_allow_html=True)
+    if st.button(f"Logout", type="secondary"):
         token = st.session_state.get('session_token')
         if token:
             delete_session(token)
         
-        # 2. Rimuovi Cookie (tentativo best effort)
         try:
             cookie_manager.delete("wpex_session")
         except: pass
         
-        # 3. Pulisci stato
         st.session_state['logged_in'] = False
         st.session_state['user'] = None
         st.session_state['session_token'] = None
         if 'username' in st.session_state: del st.session_state['username']
             
-        # Redirect a Login implicitamente al prossimo rerun
         st.query_params.clear()
         st.rerun()
 
-st.title("🏢 WPEX Multi-Server Orchestrator")
-st.markdown(f"<small>Host IP: `{CURRENT_HOST_IP}`</small>", unsafe_allow_html=True)
+# ── MAIN TITLE ──
+st.markdown(f'<h1 style="display:flex;align-items:center;gap:10px">{icon("layout-dashboard")} WPEX Orchestrator</h1>', unsafe_allow_html=True)
+st.markdown(f'<span class="info-badge">Host: <code>{CURRENT_HOST_IP}</code></span>', unsafe_allow_html=True)
 
 # --- ROUTING NAVIGATOR ---
-# Gestiamo la navigazione tramite query params
-# Page è già stato letto sopra
-
 server_name_param = st.query_params.get("name", None)
 
 if page == "server" and server_name_param:
-    # --- VISTA SINGOLA SERVER ---
+    # ── VISTA SINGOLA SERVER ──
     current_view_server = server_name_param
     
-    # Troviamo i dati del server
     all_servers = get_servers_list()
     srv_data = next((s for s in all_servers if s['name'] == current_view_server), None)
     
     if not srv_data:
         st.error(f"Server {current_view_server} non trovato.")
-        if st.button("Torna alla Dashboard"):
+        if st.button(f"{icon('arrow-left')} Torna alla Dashboard"):
             st.query_params.clear()
             st.rerun()
     else:
-        st.subheader(f"🖥️ Monitor: {current_view_server}")
+        st.markdown(f'### {icon("monitor")} Monitor: {current_view_server}', unsafe_allow_html=True)
         c1, c2 = st.columns([1, 4])
-        if c1.button("⬅️ Dashboard"):
+        if c1.button("Dashboard", key="back_dash"):
             st.query_params.clear()
             st.rerun()
         
-        # 1. Iframe della GUI (Solo la parte visuale)
-        # Nota: Qui usiamo il path rewritato da Nginx per l'accesso raw
-        # L'accesso raw è protetto? No, al momento no, ma nginx lo nasconde parzialmente.
-        # Useremo il path interno /wpex-<name>/
+        # Iframe della GUI
         raw_gui_url = f"/wpex-{current_view_server}/"
         components.iframe(raw_gui_url, height=600, scrolling=True)
         
-        # 2. Controlli sotto (Integrated)
+        # Controlli sotto
         st.divider()
-        st.markdown("### 🛠️ Controlli Integrati")
+        st.markdown(f'### {icon("settings")} Controlli Integrati', unsafe_allow_html=True)
         
         col_info, col_actions = st.columns([2, 1])
         with col_info:
-            status, _ = get_docker_status(f"wpex-{current_view_server}") # Fix: aggiungi wpex-
-            st.write(f"**Status:** {status.upper()}")
-            st.caption(f"UDP: {srv_data['udp_port']} | Web (Internal): {srv_data['web_port']}")
+            status, _ = get_docker_status(f"wpex-{current_view_server}")
+            st.markdown(f'{status_dot(status)} **Status:** {status.upper()}', unsafe_allow_html=True)
+            st.markdown(
+                f'<span class="info-badge">UDP: {srv_data["udp_port"]}</span>'
+                f'<span class="info-badge">Web: {srv_data["web_port"]}</span>',
+                unsafe_allow_html=True
+            )
             
             # Gestione Chiavi rapida
             all_keys_global = get_all_keys_info()
@@ -812,30 +620,31 @@ if page == "server" and server_name_param:
         with col_actions:
             st.write("**Azioni Rapide:**")
             ca1, ca2 = st.columns(2)
-            if ca1.button("▶️ Start", key=f"st_v_{srv_data['id']}"): start_server_docker(srv_data['name']); st.rerun()
-            if ca2.button("⏸️ Stop", key=f"sp_v_{srv_data['id']}"): stop_server_docker(srv_data['name']); st.rerun()
+            if ca1.button("Start", key=f"st_v_{srv_data['id']}"): start_server_docker(srv_data['name']); st.rerun()
+            if ca2.button("Stop", key=f"sp_v_{srv_data['id']}"): stop_server_docker(srv_data['name']); st.rerun()
             
         if st.checkbox("Mostra Logs", key=f"log_v_{srv_data['id']}"):
             st.code(get_logs(srv_data['name']))
 
 else:
-    # --- DASHBOARD (VIEW PRINCIPALE) ---
-    tab_servers, tab_keys = st.tabs(["📦 Server & Istanze", "🔐 Database Chiavi"])
+    # ── DASHBOARD (VIEW PRINCIPALE) ──
+    tab_servers, tab_keys = st.tabs([
+        f"Server & Istanze",
+        f"Database Chiavi"
+    ])
     
     # ==========================
     # TAB 1: GESTIONE SERVER
     # ==========================
     with tab_servers:
-        # --- LISTA SERVER ---
-        with st.expander("➕ Aggiungi Nuovo Server", expanded=False):
+        with st.expander(f"Aggiungi Nuovo Server", expanded=False):
             with st.form("new_server_form", clear_on_submit=True):
                 c1, c2 = st.columns(2)
                 srv_name = c1.text_input("Nome Server", placeholder="es. alpha")
                 srv_udp = c2.number_input("Porta UDP", value=40000, step=1)
                 
-                # Carichiamo tutte le chiavi disponibili
                 all_keys_info = get_all_keys_info()
-                key_map = {k['id']: k['alias'] for k in all_keys_info} # ID -> Alias
+                key_map = {k['id']: k['alias'] for k in all_keys_info}
                 
                 selected_ids = st.multiselect("Seleziona Chiavi", options=key_map.keys(), format_func=lambda x: key_map[x])
 
@@ -845,7 +654,6 @@ else:
                         srv_web = get_next_web_port()
                         ok, msg = add_server_db(srv_name, srv_udp, srv_web, selected_ids)
                         if ok:
-                            # Estraiamo le chiavi raw per docker
                             raw_keys = [k['key'] for k in all_keys_info if k['id'] in selected_ids]
                             res, d_msg = deploy_server_docker(srv_name, srv_udp, srv_web, raw_keys)
                             if res: st.rerun()
@@ -857,30 +665,32 @@ else:
 
         # --- LISTA SERVER ---
         servers = get_servers_list()
-        # Serve ricaricare le info globali delle chiavi per i menu di modifica
         all_keys_global = get_all_keys_info()
         global_key_map = {k['id']: k['alias'] for k in all_keys_global}
 
         if not servers: st.info("Nessun server attivo.")
         
         for srv in servers:
-            with st.container():
+            with st.container(border=True):
                 status, _ = get_docker_status(f"wpex-{srv['name']}")
-                status_icon = "🟢" if status == "running" else "🔴" if status in ["exited", "stopped"] else "⚪"
                 
                 c_info, c_actions = st.columns([3, 2])
                 
                 # Colonna INFO
                 with c_info:
-                    st.markdown(f"### {status_icon} wpex-{srv['name']}")
-                    st.caption(f"UDP: **{srv['udp_port']}** | Web: **{srv['web_port']}**")
+                    st.markdown(
+                        f'<div class="server-title">{status_dot(status)} wpex-{srv["name"]}</div>',
+                        unsafe_allow_html=True
+                    )
+                    st.markdown(
+                        f'<span class="info-badge">UDP: {srv["udp_port"]}</span>'
+                        f'<span class="info-badge">Web: {srv["web_port"]}</span>',
+                        unsafe_allow_html=True
+                    )
                     
-                    # --- NUOVA SEZIONE: GESTIONE CHIAVI ---
-                    with st.expander(f"⚙️ Gestisci Chiavi ({len(srv['keys'])})"):
-                        # 1. Troviamo gli ID delle chiavi attualmente assegnate a questo server
+                    with st.expander(f"Gestisci Chiavi ({len(srv['keys'])})"):
                         current_server_key_ids = [k['id'] for k in srv['keys']]
                         
-                        # 2. Multiselect pre-compilato
                         new_selection = st.multiselect(
                             "Modifica lista chiavi:",
                             options=global_key_map.keys(),
@@ -889,15 +699,11 @@ else:
                             key=f"ms_{srv['id']}"
                         )
                         
-                        # 3. Pulsante Aggiornamento
-                        if st.button("💾 Salva e Riavvia", key=f"save_{srv['id']}"):
-                            # Aggiorna DB
+                        if st.button("Salva e Riavvia", key=f"save_{srv['id']}"):
                             if update_server_keys_link(srv['id'], new_selection):
-                                # Prepara lista chiavi raw per docker
                                 new_keys_raw = [k['key'] for k in all_keys_global if k['id'] in new_selection]
-                                # Riavvia Docker
                                 deploy_server_docker(srv['name'], srv['udp_port'], srv['web_port'], new_keys_raw)
-                                st.toast("Chiavi aggiornate!", icon="✅")
+                                st.toast("Chiavi aggiornate!")
                                 time.sleep(1)
                                 st.rerun()
                             else:
@@ -907,33 +713,30 @@ else:
                 with c_actions:
                     st.write("**Controlli:**")
                     b1, b2, b3 = st.columns(3)
-                    if b1.button("▶️", key=f"start_{srv['id']}", disabled=(status=="running")):
+                    if b1.button("Start", key=f"start_{srv['id']}", disabled=(status=="running")):
                         start_server_docker(srv['name'])
                         st.rerun()
-                    if b2.button("⏸️", key=f"stop_{srv['id']}", disabled=(status!="running")):
+                    if b2.button("Stop", key=f"stop_{srv['id']}", disabled=(status!="running")):
                         stop_server_docker(srv['name'])
                         st.rerun()
-                    if b3.button("🗑️", key=f"del_{srv['id']}"):
+                    if b3.button("Delete", key=f"del_{srv['id']}"):
                         remove_server_docker(srv['name'])
                         delete_server_db(srv['id'])
                         st.rerun()
                     
-                    # Visualizza nel dashboard (Link con Query Param)
-                    if st.button(f"👁️ Console", key=f"view_{srv['id']}"):
+                    if st.button(f"Console", key=f"view_{srv['id']}"):
                          st.query_params["page"] = "server"
                          st.query_params["name"] = srv['name']
                          st.rerun()
                 
                 if st.checkbox("Logs", key=f"lg_{srv['id']}"):
                     st.code(get_logs(srv['name']))
-                
-                st.write("---")
 
     # ==========================
     # TAB 2: GLOBAL KEYS
     # ==========================
     with tab_keys:
-        st.subheader("Chiavi Globali")
+        st.markdown(f'### {icon("database")} Chiavi Globali', unsafe_allow_html=True)
         with st.form("add_key"):
             c1, c2 = st.columns([1, 2])
             alias = c1.text_input("Nome/Alias")
@@ -942,12 +745,13 @@ else:
                 add_global_key(alias, k_val)
                 st.rerun()
         
-        st.write("---")
+        st.divider()
         keys = get_all_keys_info()
         for k in keys:
-            c1, c2, c3 = st.columns([2, 4, 1])
-            c1.write(f"**{k['alias']}**")
-            c2.markdown(f'<span class="secret-hover">{k["key"]}</span>', unsafe_allow_html=True)
-            if c3.button("🗑️", key=f"kd_{k['id']}"):
-                delete_global_key(k['id'])
-                st.rerun()
+            with st.container(border=True):
+                c1, c2, c3 = st.columns([2, 4, 1])
+                c1.markdown(f'{icon("key")} **{k["alias"]}**', unsafe_allow_html=True)
+                c2.markdown(f'<span class="secret-hover">{k["key"]}</span>', unsafe_allow_html=True)
+                if c3.button("Delete", key=f"kd_{k['id']}"):
+                    delete_global_key(k['id'])
+                    st.rerun()
