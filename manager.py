@@ -552,7 +552,7 @@ if 'db_init' not in st.session_state:
 
 # --- COOKIE MANAGER ---
 # Importante: deve essere inizializzato prima di qualsiasi check
-cookie_manager = stx.CookieManager()
+cookie_manager = stx.CookieManager(key="wpex_cookie_mgr")
 
 # --- SESSION CHECK ---
 # --- SESSION CHECK ---
@@ -567,8 +567,7 @@ if 'logged_in' not in st.session_state:
 if not st.session_state['logged_in']:
     cookies = cookie_manager.get_all()
     
-    # Se non abbiamo ancora controllato e i cookies sembrano vuoti (o nulli),
-    # potenzialmente stanno ancora caricando.
+    # Se non abbiamo ancora controllato
     if not st.session_state['auth_checked']:
         # Se i cookies sono None, stx non è pronto.
         if cookies is None:
@@ -591,11 +590,11 @@ if not st.session_state['logged_in']:
                 st.rerun()
         
         # Se non abbiamo trovato nulla, dobbiamo essere SICURI che non sia un ritardo di caricamento.
-        # Proviamo a fare 2-3 tentativi di rerun prima di arrenderci.
+        # Proviamo a fare 5 tentativi di rerun prima di arrenderci (incognito/slow network)
         retry_count = st.session_state.get('auth_retries', 0)
-        if retry_count < 2:
+        if retry_count < 5:
              st.session_state['auth_retries'] = retry_count + 1
-             time.sleep(0.3)
+             time.sleep(0.5)
              st.rerun()
              
         # Se siamo arrivati qui dopo i retry, allora NON siamo loggati davvero.
