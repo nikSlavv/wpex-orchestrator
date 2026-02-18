@@ -14,6 +14,14 @@ import jwt
 # --- CONFIGURAZIONE ---
 IMAGE_NAME = "nikoceps/wpex-monitoring:latest"
 
+# --- GESTIONE SECRETS ---
+def get_secret(secret_name, default=None):
+    try:
+        with open(f"/run/secrets/{secret_name}", "r") as f:
+            return f.read().strip()
+    except IOError:
+        return default
+
 # --- JWT CONFIG ---
 # Usa prima Docker Secret, poi Env Var, poi Fallback
 JWT_SECRET = get_secret("jwt_secret")
@@ -139,13 +147,6 @@ def init_db():
         
         conn.commit()
         conn.close()
-    try:
-        # Timeout breve per non bloccare l'app se offline
-        return os.getenv("HOST_IP", requests.get('https://api.ipify.org', timeout=1).text)
-    except:
-        return "localhost"
-
-CURRENT_HOST_IP = get_public_ip()
 
 # --- CSS CUSTOM ---
 st.markdown("""
@@ -172,14 +173,6 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
-
-# --- GESTIONE SECRETS ---
-def get_secret(secret_name, default=None):
-    try:
-        with open(f"/run/secrets/{secret_name}", "r") as f:
-            return f.read().strip()
-    except IOError:
-        return default
 
 DB_HOST = os.getenv("DB_HOST", "db")
 DB_NAME = os.getenv("DB_NAME", "wpex_keys_db")
