@@ -15,7 +15,11 @@ import jwt
 IMAGE_NAME = "nikoceps/wpex-monitoring:latest"
 
 # --- JWT CONFIG ---
-JWT_SECRET = st.secrets.get("jwt_secret", os.getenv("JWT_SECRET", "fallback_secret_key_change_me"))
+# Usa prima Docker Secret, poi Env Var, poi Fallback
+JWT_SECRET = get_secret("jwt_secret")
+if not JWT_SECRET:
+    JWT_SECRET = os.getenv("JWT_SECRET", "fallback_secret_key_change_me")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DAYS = 7
 
@@ -70,10 +74,6 @@ DB_PASS = get_secret("db_password", "admin")
 DATA_KEY = get_secret("db_encryption_key", "mysecretkey")
 WPEX_NETWORK = os.getenv("WPEX_NETWORK", "wpex_wpex-network")
 
-# Sovrascriviamo JWT_SECRET se disponibile via docker secrets (più sicuro)
-secret_jwt = get_secret("jwt_secret")
-if secret_jwt:
-    JWT_SECRET = secret_jwt
 
 st.set_page_config(page_title="WPEX Orchestrator", page_icon="🏢", layout="wide")
 
