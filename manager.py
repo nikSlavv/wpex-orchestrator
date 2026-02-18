@@ -9,12 +9,136 @@ import requests
 import datetime
 import uuid
 import extra_streamlit_components as stx
+import jwt
 
 # --- CONFIGURAZIONE ---
 IMAGE_NAME = "nikoceps/wpex-monitoring:latest"
 
+# --- JWT CONFIG ---
+JWT_SECRET = st.secrets.get("jwt_secret", os.getenv("JWT_SECRET", "fallback_secret_key_change_me"))
+JWT_ALGORITHM = "HS256"
+JWT_EXP_DAYS = 7
+
 # Tenta di ottenere l'IP pubblico per i link
 def get_public_ip():
+    try:
+        # Timeout breve per non bloccare l'app se offline
+        return os.getenv("HOST_IP", requests.get('https://api.ipify.org', timeout=1).text)
+    except:
+        return "localhost"
+
+CURRENT_HOST_IP = get_public_ip()
+
+# --- CSS CUSTOM ---
+st.markdown("""
+<style>
+    .secret-hover {
+        background-color: #333;
+        color: #333; 
+        border-radius: 4px;
+        padding: 5px 10px;
+        font-family: monospace;
+        transition: all 0.2s ease-in-out;
+        cursor: text;
+        user-select: all; 
+        border: 1px solid #444;
+    }
+    .secret-hover:hover {
+        background-color: #222;
+        color: #0f0; 
+        border-color: #0f0;
+    }
+    /* Riduciamo spaziatura expander */
+    .streamlit-expanderHeader {
+        font-size: 0.9em;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# --- GESTIONE SECRETS ---
+def get_secret(secret_name, default=None):
+    try:
+        with open(f"/run/secrets/{secret_name}", "r") as f:
+            return f.read().strip()
+    except IOError:
+        return default
+
+DB_HOST = os.getenv("DB_HOST", "db")
+DB_NAME = os.getenv("DB_NAME", "wpex_keys_db")
+DB_USER = os.getenv("DB_USER", "wpex_admin")
+DB_PASS = get_secret("db_password", "admin")
+DATA_KEY = get_secret("db_encryption_key", "mysecretkey")
+WPEX_NETWORK = os.getenv("WPEX_NETWORK", "wpex_wpex-network")
+
+# Sovrascriviamo JWT_SECRET se disponibile via docker secrets (più sicuro)
+secret_jwt = get_secret("jwt_secret")
+if secret_jwt:
+    JWT_SECRET = secret_jwt
+
+st.set_page_config(page_title="WPEX Orchestrator", page_icon="🏢", layout="wide")
+
+# --- DATABASE LAYER ---
+def get_db_connection():
+    try:
+        return psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
+    except Exception as e:
+        st.toast(f"❌ Errore DB: {e}", icon="🔥")
+        return None
+
+def init_db():
+    conn = get_db_connection()
+    if conn:
+        cur = conn.cursor()
+        cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS access_keys (
+                id SERIAL PRIMARY KEY,
+                alias VARCHAR(50), 
+                key_value BYTEA NOT NULL, 
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS servers (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(50) UNIQUE NOT NULL,
+                port INT UNIQUE NOT NULL,
+                web_port INT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS server_keys_link (
+                server_id INT REFERENCES servers(id) ON DELETE CASCADE,
+                key_id INT REFERENCES access_keys(id) ON DELETE CASCADE,
+                PRIMARY KEY (server_id, key_id)
+            );
+        """)
+
+        # Tabella Utenti per Login
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                username VARCHAR(50) UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+
+        # Tabella Blacklist Token (Logout) - SOSTITUISCE SESSIONS
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS token_blacklist (
+                jti VARCHAR(36) PRIMARY KEY,
+                expires_at TIMESTAMP NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+        """)
+        
+        conn.commit()
+        conn.close()
     try:
         # Timeout breve per non bloccare l'app se offline
         return os.getenv("HOST_IP", requests.get('https://api.ipify.org', timeout=1).text)
@@ -314,49 +438,22 @@ def get_logs(name):
 
 # --- AUTH FUNCTIONS ---
 
-def create_session(user_id):
-    conn = get_db_connection()
-    if conn:
-        try:
-            token = str(uuid.uuid4())
-            expires_at = datetime.datetime.now() + datetime.timedelta(days=7)
-            cur = conn.cursor()
-            cur.execute("INSERT INTO sessions (user_id, token, expires_at) VALUES (%s, %s, %s)", (user_id, token, expires_at))
-            conn.commit()
-            conn.close()
-            return token, expires_at
-        except Exception as e:
-            st.error(f"Errore creazione sessione: {e}")
-            return None, None
-    return None, None
+# (create_session RIMOSSA)
 
 def get_user_from_session(token):
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute("""
-                SELECT u.id, u.username 
-                FROM sessions s 
-                JOIN users u ON s.user_id = u.id 
-                WHERE s.token = %s AND s.expires_at > NOW()
-            """, (token,))
-            user = cur.fetchone()
-            conn.close()
-            if user:
-                return {"id": user[0], "username": user[1]}
-        except: pass
+    # In JWT mode, "session" is the token itself
+    payload = verify_jwt_token(token)
+    if payload:
+        return {"id": payload['sub'], "username": payload['name']}
     return None
 
 def delete_session(token):
-    conn = get_db_connection()
-    if conn:
-        try:
-            cur = conn.cursor()
-            cur.execute("DELETE FROM sessions WHERE token = %s", (token,))
-            conn.commit()
-            conn.close()
-        except: pass
+    # In JWT mode, we blacklist the token
+    # We need to decode it first to get jti/exp
+    try:
+        payload = jwt.decode(token, options={"verify_signature": False})
+        blacklist_token(payload['jti'], payload['exp'])
+    except: pass
 
 def create_user(username, password):
     conn = get_db_connection()
@@ -372,7 +469,6 @@ def create_user(username, password):
         except psycopg2.errors.UniqueViolation:
             return False, "Username già esistente."
         except Exception as e:
-            return False, f"Errore creazione utente: {e}"
             return False, f"Errore creazione utente: {e}"
     return False, "Errore connessione DB"
 
@@ -393,11 +489,10 @@ def check_login(username, password):
             return False, None
     return False, None
 
-    return False, None
 
-# login_page removed as it's now inline
-
-    # Stile Moderno / Glassmorphism per la login
+# --- LOGIN PAGE WRAPPER ---
+if 'login_page_wrapper' not in st.session_state:
+     # Stile Moderno / Glassmorphism per la login
     st.markdown("""
     <style>
         .login-container {
@@ -428,6 +523,9 @@ def check_login(username, password):
         h1 { text-align: center; margin-bottom: 2rem; }
     </style>
     """, unsafe_allow_html=True)
+
+    
+    # ... (Login logic inline below) ...
 
     c1, c2, c3 = st.columns([1, 2, 1])
     with c2:
@@ -595,8 +693,8 @@ if not st.session_state['logged_in']:
                     if username and password:
                         success, user_data = check_login(username, password)
                         if success:
-                            # 1. Crea Sessione DB
-                            token, expires = create_session(user_data[0])
+                            # 1. Crea JWT Token
+                            token, expires = create_jwt_token(user_data[0], user_data[1])
                             if token:
                                 # 2. Setta Cookie
                                 cookie_manager.set("wpex_session", token, expires_at=expires)
@@ -611,7 +709,7 @@ if not st.session_state['logged_in']:
                                 st.query_params.clear()
                                 st.rerun()
                             else:
-                                st.error("Errore creazione sessione.")
+                                st.error("Errore creazione token.")
                         else:
                             st.error("Credenziali non valide.")
                     else:
@@ -638,7 +736,10 @@ if not st.session_state['logged_in']:
                     else:
                         st.warning("Compila tutti i campi.")
     
-    st.stop()  # Stop se non loggato
+    # Se non siamo loggati e stiamo renderizzando il form, fermiamo qui l'esecuzione
+    # SE siamo appena loggati (rerun), questo blocco non viene raggiunto o st.stop viene saltato
+    if not st.session_state['logged_in']:
+        st.stop()
 
 # SE SIAMO LOGGATI MA SIAMO SU ?page=login, redirect a root
 if page == "login":
