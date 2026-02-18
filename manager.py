@@ -29,11 +29,6 @@ if not JWT_SECRET:
     # 32+ chars fallback
     JWT_SECRET = os.getenv("JWT_SECRET", "changeme_super_long_fallback_secret_key_32bytes_minimum")
 
-# DEBUG SECRET (Rimuovere in prod o mascherare)
-print(f"DEBUG: JWT_SECRET loaded. Length: {len(JWT_SECRET) if JWT_SECRET else 0}")
-if JWT_SECRET and len(JWT_SECRET) < 32:
-    print("WARNING: JWT_SECRET is too short (<32 bytes). Use a longer secret!")
-
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DAYS = 7
 
@@ -474,18 +469,14 @@ def verify_jwt_token(token):
         
         # Check Blacklist
         if is_token_blacklisted(payload['jti']):
-            print(f"DEBUG: Token blacklisted: {payload['jti']}")
             return None
             
         return payload
     except jwt.ExpiredSignatureError:
-        print("DEBUG: Token expired")
         return None
-    except jwt.InvalidTokenError as e:
-        print(f"DEBUG: Invalid token: {e}")
+    except jwt.InvalidTokenError:
         return None
-    except Exception as e:
-        print(f"DEBUG: Unexpected error verifying token: {e}")
+    except Exception:
         return None
 
 def blacklist_token(jti, exp_timestamp):
@@ -576,7 +567,6 @@ if 'logged_in' not in st.session_state:
 # 1. Controlla se c'è un cookie valido se non siamo ancora loggati
 if not st.session_state['logged_in']:
     cookies = cookie_manager.get_all()
-    # st.write(f"DEBUG COOKIES: {cookies}") # Decommentare per debug a video
     
     # Se non abbiamo ancora controllato
     if not st.session_state['auth_checked']:
@@ -599,8 +589,6 @@ if not st.session_state['logged_in']:
                 if st.query_params.get("page") == "login":
                      st.query_params["page"] = "dashboard"
                 st.rerun()
-            else:
-                print(f"DEBUG: Cookie found but jwt validation failed. Token: {session_token[:10]}...")
         
         # Se non abbiamo trovato nulla, dobbiamo essere SICURI che non sia un ritardo di caricamento.
         # Proviamo a fare 5 tentativi di rerun prima di arrenderci (incognito/slow network)
@@ -689,7 +677,7 @@ if not st.session_state['logged_in']:
                                 st.session_state['user'] = {"id": user_data[0], "username": user_data[1]}
                                 st.session_state['session_token'] = token
                                 st.toast(f"Benvenuto {user_data[1]}!", icon="👋")
-                                time.sleep(2.0) # Aumentato per sicurezza cookie
+                                time.sleep(0.5) # Ritardo ottimizzato
                                 # REDIRECT A ROOT DOPO LOGIN
                                 st.query_params.clear()
                                 st.rerun()
