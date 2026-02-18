@@ -506,9 +506,6 @@ if not st.session_state['logged_in']:
         if cookies is None:
             st.stop()
         
-        # Se i cookies sono {}, proviamo a dare un tick in più?
-        # Non possiamo distinguere tra "nessun cookie" e "non ancora caricato" facilmente se è {}.
-        # Ma stx di solito aggiorna. Se i cookies sono {}, proviamo a cercare il token.
         session_token = cookies.get("wpex_session")
         
         if session_token:
@@ -525,13 +522,15 @@ if not st.session_state['logged_in']:
                      st.query_params["page"] = "dashboard"
                 st.rerun()
         
-        # Se non abbiamo trovato nulla, segniamo come controllato MA forziamo un rerun
-        # per essere SICURI che stx abbia finito il sync (spesso serve un roundtrip).
-        if not st.session_state.get('auth_retry', False):
-            st.session_state['auth_retry'] = True
-            time.sleep(0.2) # Breve attesa per dare tempo al frontend
-            st.rerun()
-            
+        # Se non abbiamo trovato nulla, dobbiamo essere SICURI che non sia un ritardo di caricamento.
+        # Proviamo a fare 2-3 tentativi di rerun prima di arrenderci.
+        retry_count = st.session_state.get('auth_retries', 0)
+        if retry_count < 2:
+             st.session_state['auth_retries'] = retry_count + 1
+             time.sleep(0.3)
+             st.rerun()
+             
+        # Se siamo arrivati qui dopo i retry, allora NON siamo loggati davvero.
         st.session_state['auth_checked'] = True
 # --- ROUTING & REDIRECTS ---
 # Se non siamo loggati, l'UNICA pagina accessibile è login
