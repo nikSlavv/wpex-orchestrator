@@ -28,6 +28,11 @@ JWT_SECRET = get_secret("jwt_secret")
 if not JWT_SECRET:
     JWT_SECRET = os.getenv("JWT_SECRET", "fallback_secret_key_change_me")
 
+# DEBUG SECRET (Rimuovere in prod o mascherare)
+print(f"DEBUG: JWT_SECRET loaded. Length: {len(JWT_SECRET) if JWT_SECRET else 0}")
+if JWT_SECRET and len(JWT_SECRET) < 32:
+    print("WARNING: JWT_SECRET is too short (<32 bytes). Use a longer secret!")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXP_DAYS = 7
 
@@ -468,14 +473,18 @@ def verify_jwt_token(token):
         
         # Check Blacklist
         if is_token_blacklisted(payload['jti']):
+            print(f"DEBUG: Token blacklisted: {payload['jti']}")
             return None
             
         return payload
     except jwt.ExpiredSignatureError:
+        print("DEBUG: Token expired")
         return None
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as e:
+        print(f"DEBUG: Invalid token: {e}")
         return None
-    except Exception:
+    except Exception as e:
+        print(f"DEBUG: Unexpected error verifying token: {e}")
         return None
 
 def blacklist_token(jti, exp_timestamp):
