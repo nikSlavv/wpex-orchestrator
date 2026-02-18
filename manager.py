@@ -487,14 +487,21 @@ if 'db_init' not in st.session_state:
 cookie_manager = stx.CookieManager()
 
 # --- SESSION CHECK ---
+# --- SESSION CHECK ---
 if 'logged_in' not in st.session_state:
     st.session_state['logged_in'] = False
     st.session_state['user'] = None
     st.session_state['session_token'] = None
+    st.session_state['auth_checked'] = False
 
 # 1. Controlla se c'è un cookie valido se non siamo ancora loggati
 if not st.session_state['logged_in']:
     cookies = cookie_manager.get_all()
+    
+    # Se i cookies non sono ancora pronti, aspettiamo
+    if cookies is None:
+        st.stop()
+        
     session_token = cookies.get("wpex_session")
     
     if session_token:
@@ -504,7 +511,13 @@ if not st.session_state['logged_in']:
             st.session_state['user'] = user_data
             st.session_state['username'] = user_data['username']
             st.session_state['session_token'] = session_token
-
+            st.session_state['auth_checked'] = True
+            # Se siamo sulla pagina di login, facciamo un redirect pulito alla dashboard
+            if st.query_params.get("page") == "login":
+                 st.query_params["page"] = "dashboard"
+            st.rerun()
+            
+    st.session_state['auth_checked'] = True
 # --- ROUTING & REDIRECTS ---
 # Se non siamo loggati, l'UNICA pagina accessibile è login
 page = st.query_params.get("page", "dashboard")
