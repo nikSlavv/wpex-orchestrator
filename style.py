@@ -561,12 +561,102 @@ LANDING_HTML = """
             <div class="hero-badge">WPEX Orchestrator v2</div>
             <h1>Gestisci i tuoi server<br/><span class="gradient-text">in modo semplice</span></h1>
             <p>Monitora, controlla e gestisci le tue istanze WPEX da un'unica dashboard moderna. Provisioning automatico, gestione chiavi integrata e monitoraggio in tempo reale.</p>
-            <form action="/" method="GET" target="_top" style="display:inline">
-                <input type="hidden" name="page" value="login"/>
-                <button type="submit" class="hero-cta">Get Started</button>
-            </form>
         </div>
+    </div>
+</body>
+</html>
+"""
 
+# ── Shared CSS for cards (reused subset) ──
+_CARDS_CSS = """
+<style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+        background: transparent;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+        color: #e8e8f0;
+        overflow-x: hidden;
+    }
+    @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(30px); }
+        to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to   { opacity: 1; }
+    }
+    @keyframes float {
+        0%, 100% { transform: translateY(0px); }
+        50%      { transform: translateY(-8px); }
+    }
+    .landing-wrapper {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 0 20px 20px;
+        text-align: center;
+    }
+    .features {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+        margin: 10px 0 20px;
+    }
+    .feature-card {
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        border-radius: 18px;
+        padding: 24px 20px;
+        text-align: left;
+        transition: all 0.35s cubic-bezier(.4,0,.2,1);
+        animation: fadeInUp 0.6s ease-out both;
+    }
+    .feature-card:nth-child(1) { animation-delay: 0.1s; }
+    .feature-card:nth-child(2) { animation-delay: 0.25s; }
+    .feature-card:nth-child(3) { animation-delay: 0.4s; }
+    .feature-card:hover {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(124, 106, 239, 0.25);
+        transform: translateY(-6px);
+        box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    }
+    .feature-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 56px;
+        height: 56px;
+        border-radius: 14px;
+        margin-bottom: 18px;
+        transition: transform 0.3s ease;
+    }
+    .feature-card:hover .feature-icon {
+        animation: float 2s ease-in-out infinite;
+    }
+    .feature-icon.icon-purple { background: rgba(124, 106, 239, 0.12); color: #9b8afb; }
+    .feature-icon.icon-green  { background: rgba(52, 211, 153, 0.12); color: #34d399; }
+    .feature-icon.icon-blue   { background: rgba(96, 165, 250, 0.12); color: #60a5fa; }
+    .feature-card h3 { font-size: 1.08em; font-weight: 600; color: #e8e8f0; margin: 0 0 10px; }
+    .feature-card p  { font-size: 0.88em; color: #9090a8; line-height: 1.65; margin: 0; }
+    .landing-footer {
+        padding: 18px 0;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+        color: #606078;
+        font-size: 0.78em;
+        animation: fadeIn 0.8s ease-out 0.6s both;
+    }
+    @media (max-width: 768px) {
+        .features { grid-template-columns: 1fr; gap: 16px; }
+    }
+</style>
+"""
+
+LANDING_CARDS_HTML = f"""
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8">{_CARDS_CSS}</head>
+<body>
+    <div class="landing-wrapper">
         <div class="features">
             <div class="feature-card">
                 <div class="feature-icon icon-purple">ICON_SHIELD</div>
@@ -597,3 +687,6 @@ LANDING_HTML = """
 LANDING_HTML = LANDING_HTML.replace("ICON_SHIELD", icon_raw("shield"))
 LANDING_HTML = LANDING_HTML.replace("ICON_ZAP", icon_raw("zap"))
 LANDING_HTML = LANDING_HTML.replace("ICON_GLOBE", icon_raw("globe"))
+LANDING_CARDS_HTML = LANDING_CARDS_HTML.replace("ICON_SHIELD", icon_raw("shield"))
+LANDING_CARDS_HTML = LANDING_CARDS_HTML.replace("ICON_ZAP", icon_raw("zap"))
+LANDING_CARDS_HTML = LANDING_CARDS_HTML.replace("ICON_GLOBE", icon_raw("globe"))

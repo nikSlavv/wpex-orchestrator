@@ -11,7 +11,7 @@ import uuid
 import extra_streamlit_components as stx
 import jwt
 
-from style import GLOBAL_CSS, LANDING_HTML, icon, status_dot
+from style import GLOBAL_CSS, LANDING_HTML, LANDING_CARDS_HTML, icon, status_dot
 
 # --- CONFIGURAZIONE ---
 IMAGE_NAME = "nikoceps/wpex-monitoring:latest"
@@ -455,8 +455,18 @@ if not st.session_state['logged_in']:
         st.rerun()
 
     if page == "landing" or page == "dashboard":
-        # Show landing page via components.html (renders full HTML properly)
-        components.html(LANDING_HTML, height=700, scrolling=False)
+        # Hero section (title, badge, subtitle)
+        components.html(LANDING_HTML, height=310, scrolling=False)
+        
+        # Real Streamlit CTA button (iframe sandbox blocks all navigation)
+        _s1, _cta, _s2 = st.columns([1, 1, 1])
+        with _cta:
+            if st.button("Get Started", key="cta_landing", type="primary", use_container_width=True):
+                st.query_params["page"] = "login"
+                st.rerun()
+        
+        # Feature cards + footer
+        components.html(LANDING_CARDS_HTML, height=350, scrolling=False)
         
         st.stop()
 
