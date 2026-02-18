@@ -26,7 +26,8 @@ def get_secret(secret_name, default=None):
 # Usa prima Docker Secret, poi Env Var, poi Fallback
 JWT_SECRET = get_secret("jwt_secret")
 if not JWT_SECRET:
-    JWT_SECRET = os.getenv("JWT_SECRET", "fallback_secret_key_change_me")
+    # 32+ chars fallback
+    JWT_SECRET = os.getenv("JWT_SECRET", "changeme_super_long_fallback_secret_key_32bytes_minimum")
 
 # DEBUG SECRET (Rimuovere in prod o mascherare)
 print(f"DEBUG: JWT_SECRET loaded. Length: {len(JWT_SECRET) if JWT_SECRET else 0}")
@@ -597,6 +598,8 @@ if not st.session_state['logged_in']:
                 if st.query_params.get("page") == "login":
                      st.query_params["page"] = "dashboard"
                 st.rerun()
+            else:
+                print(f"DEBUG: Cookie found but jwt validation failed. Token: {session_token[:10]}...")
         
         # Se non abbiamo trovato nulla, dobbiamo essere SICURI che non sia un ritardo di caricamento.
         # Proviamo a fare 5 tentativi di rerun prima di arrenderci (incognito/slow network)
@@ -682,7 +685,7 @@ if not st.session_state['logged_in']:
                                 st.session_state['user'] = {"id": user_data[0], "username": user_data[1]}
                                 st.session_state['session_token'] = token
                                 st.toast(f"Benvenuto {user_data[1]}!", icon="👋")
-                                time.sleep(0.5)
+                                time.sleep(2.0) # Aumentato per sicurezza cookie
                                 # REDIRECT A ROOT DOPO LOGIN
                                 st.query_params.clear()
                                 st.rerun()
