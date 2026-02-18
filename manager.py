@@ -431,6 +431,65 @@ def get_logs(name):
 
 # --- AUTH FUNCTIONS ---
 
+def create_jwt_token(user_id, username):
+    try:
+        expiration = datetime.datetime.utcnow() + datetime.timedelta(days=JWT_EXP_DAYS)
+        jti = str(uuid.uuid4())
+        
+        payload = {
+            "sub": user_id,
+            "name": username,
+            "exp": expiration,
+            "jti": jti
+        }
+        
+        token = jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
+        return token, expiration
+    except Exception as e:
+        print(f"Error creating token: {e}")
+        return None, None
+
+def is_token_blacklisted(jti):
+    conn = get_db_connection()
+    if conn:
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT 1 FROM token_blacklist WHERE jti = %s", (jti,))
+            exists = cur.fetchone()
+            conn.close()
+            return exists is not None
+        except: pass
+    return False
+
+def verify_jwt_token(token):
+    try:
+        # Decode and verify
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        
+        # Check Blacklist
+        if is_token_blacklisted(payload['jti']):
+            return None
+            
+        return payload
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
+        return None
+    except Exception:
+        return None
+
+def blacklist_token(jti, exp_timestamp):
+    conn = get_db_connection()
+    if conn:
+        try:
+            # Convert timestamp to datetime
+            expires_at = datetime.datetime.fromtimestamp(exp_timestamp)
+            cur = conn.cursor()
+            cur.execute("INSERT INTO token_blacklist (jti, expires_at) VALUES (%s, %s)", (jti, expires_at))
+            conn.commit()
+            conn.close()
+        except: pass
+
 # (create_session RIMOSSA)
 
 def get_user_from_session(token):
