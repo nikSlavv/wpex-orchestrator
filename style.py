@@ -366,174 +366,228 @@ GLOBAL_CSS = """
 # ────────────────────────────────────────────
 
 LANDING_HTML = """
-<style>
-    .landing-wrapper {
-        max-width: 960px;
-        margin: 0 auto;
-        padding: 40px 20px;
-        text-align: center;
-    }
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        html, body {
+            background: transparent;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            color: #e8e8f0;
+            overflow-x: hidden;
+        }
 
-    /* Hero */
-    .hero {
-        padding: 80px 0 60px;
-    }
-    .hero-badge {
-        display: inline-block;
-        padding: 6px 16px;
-        border-radius: 20px;
-        font-size: 0.8em;
-        font-weight: 500;
-        background: rgba(124, 106, 239, 0.12);
-        color: #9b8afb;
-        border: 1px solid rgba(124, 106, 239, 0.25);
-        margin-bottom: 24px;
-        letter-spacing: 0.5px;
-    }
-    .hero h1 {
-        font-family: 'Inter', sans-serif;
-        font-size: 3.2em;
-        font-weight: 700;
-        line-height: 1.15;
-        color: #e8e8f0;
-        margin: 0 0 20px;
-    }
-    .hero h1 .gradient-text {
-        background: linear-gradient(135deg, #7c6aef, #a78bfa, #34d399);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
-    }
-    .hero p {
-        font-size: 1.15em;
-        color: #9090a8;
-        max-width: 560px;
-        margin: 0 auto 40px;
-        line-height: 1.7;
-    }
-    .hero-cta {
-        display: inline-block;
-        padding: 14px 36px;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #7c6aef, #6355d8);
-        color: white !important;
-        text-decoration: none;
-        font-weight: 600;
-        font-size: 1.05em;
-        transition: all 0.3s cubic-bezier(.4,0,.2,1);
-        box-shadow: 0 4px 16px rgba(124, 106, 239, 0.3);
-    }
-    .hero-cta:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 8px 28px rgba(124, 106, 239, 0.45);
-    }
+        /* ── Animations ─────────────── */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(30px); }
+            to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to   { opacity: 1; }
+        }
+        @keyframes gradientShift {
+            0%   { background-position: 0% 50%; }
+            50%  { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50%      { transform: translateY(-8px); }
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 4px 16px rgba(124, 106, 239, 0.3); }
+            50%      { box-shadow: 0 8px 32px rgba(124, 106, 239, 0.5); }
+        }
 
-    /* Features */
-    .features {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 24px;
-        margin: 60px 0;
-    }
-    .feature-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.07);
-        border-radius: 16px;
-        padding: 32px 24px;
-        text-align: left;
-        transition: all 0.3s ease;
-    }
-    .feature-card:hover {
-        background: rgba(255, 255, 255, 0.06);
-        border-color: rgba(124, 106, 239, 0.2);
-        transform: translateY(-4px);
-        box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
-    }
-    .feature-icon {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        width: 56px;
-        height: 56px;
-        border-radius: 14px;
-        margin-bottom: 18px;
-    }
-    .feature-icon.icon-purple {
-        background: rgba(124, 106, 239, 0.12);
-        color: #9b8afb;
-    }
-    .feature-icon.icon-green {
-        background: rgba(52, 211, 153, 0.12);
-        color: #34d399;
-    }
-    .feature-icon.icon-blue {
-        background: rgba(96, 165, 250, 0.12);
-        color: #60a5fa;
-    }
-    .feature-card h3 {
-        font-family: 'Inter', sans-serif;
-        font-size: 1.1em;
-        font-weight: 600;
-        color: #e8e8f0;
-        margin: 0 0 10px;
-    }
-    .feature-card p {
-        font-size: 0.9em;
-        color: #9090a8;
-        line-height: 1.6;
-        margin: 0;
-    }
+        .landing-wrapper {
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 20px 20px 40px;
+            text-align: center;
+        }
 
-    /* Footer */
-    .landing-footer {
-        padding: 30px 0;
-        border-top: 1px solid rgba(255, 255, 255, 0.06);
-        color: #606078;
-        font-size: 0.8em;
-    }
+        /* ── Hero ─────────────────── */
+        .hero {
+            padding: 60px 0 40px;
+            animation: fadeIn 0.8s ease-out;
+        }
+        .hero-badge {
+            display: inline-block;
+            padding: 6px 18px;
+            border-radius: 20px;
+            font-size: 0.78em;
+            font-weight: 500;
+            background: rgba(124, 106, 239, 0.12);
+            color: #9b8afb;
+            border: 1px solid rgba(124, 106, 239, 0.25);
+            margin-bottom: 28px;
+            letter-spacing: 0.8px;
+            text-transform: uppercase;
+            animation: fadeInUp 0.6s ease-out 0.2s both;
+        }
+        .hero h1 {
+            font-size: 3.4em;
+            font-weight: 700;
+            line-height: 1.12;
+            margin: 0 0 22px;
+            animation: fadeInUp 0.7s ease-out 0.3s both;
+        }
+        .gradient-text {
+            background: linear-gradient(135deg, #7c6aef, #a78bfa, #34d399, #60a5fa);
+            background-size: 200% 200%;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: gradientShift 4s ease infinite;
+        }
+        .hero p {
+            font-size: 1.12em;
+            color: #9090a8;
+            max-width: 540px;
+            margin: 0 auto 36px;
+            line-height: 1.75;
+            animation: fadeInUp 0.7s ease-out 0.45s both;
+        }
+        .hero-cta {
+            display: inline-block;
+            padding: 15px 40px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #7c6aef, #6355d8);
+            color: white !important;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.05em;
+            cursor: pointer;
+            border: none;
+            transition: all 0.35s cubic-bezier(.4,0,.2,1);
+            animation: fadeInUp 0.7s ease-out 0.6s both, pulseGlow 3s ease-in-out 1.5s infinite;
+        }
+        .hero-cta:hover {
+            transform: translateY(-3px) scale(1.02);
+            box-shadow: 0 12px 36px rgba(124, 106, 239, 0.5);
+        }
+        .hero-cta:active {
+            transform: translateY(0) scale(0.98);
+        }
 
-    /* Responsive */
-    @media (max-width: 768px) {
-        .hero h1 { font-size: 2.2em; }
-        .features { grid-template-columns: 1fr; }
-    }
-</style>
+        /* ── Features ────────────── */
+        .features {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 22px;
+            margin: 50px 0;
+        }
+        .feature-card {
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: 18px;
+            padding: 30px 22px;
+            text-align: left;
+            transition: all 0.35s cubic-bezier(.4,0,.2,1);
+            animation: fadeInUp 0.6s ease-out both;
+        }
+        .feature-card:nth-child(1) { animation-delay: 0.5s; }
+        .feature-card:nth-child(2) { animation-delay: 0.65s; }
+        .feature-card:nth-child(3) { animation-delay: 0.8s; }
+        .feature-card:hover {
+            background: rgba(255, 255, 255, 0.06);
+            border-color: rgba(124, 106, 239, 0.25);
+            transform: translateY(-6px);
+            box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+        }
+        .feature-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 56px;
+            height: 56px;
+            border-radius: 14px;
+            margin-bottom: 18px;
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover .feature-icon {
+            animation: float 2s ease-in-out infinite;
+        }
+        .feature-icon.icon-purple {
+            background: rgba(124, 106, 239, 0.12);
+            color: #9b8afb;
+        }
+        .feature-icon.icon-green {
+            background: rgba(52, 211, 153, 0.12);
+            color: #34d399;
+        }
+        .feature-icon.icon-blue {
+            background: rgba(96, 165, 250, 0.12);
+            color: #60a5fa;
+        }
+        .feature-card h3 {
+            font-size: 1.08em;
+            font-weight: 600;
+            color: #e8e8f0;
+            margin: 0 0 10px;
+        }
+        .feature-card p {
+            font-size: 0.88em;
+            color: #9090a8;
+            line-height: 1.65;
+            margin: 0;
+        }
 
-<div class="landing-wrapper">
-    <div class="hero">
-        <div class="hero-badge">WPEX Orchestrator v2</div>
-        <h1>Gestisci i tuoi server<br/><span class="gradient-text">in modo semplice</span></h1>
-        <p>Monitora, controlla e gestisci le tue istanze WPEX da un'unica dashboard moderna. Provisioning automatico, gestione chiavi integrata e monitoraggio in tempo reale.</p>
-    </div>
+        /* ── Footer ──────────────── */
+        .landing-footer {
+            padding: 28px 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.06);
+            color: #606078;
+            font-size: 0.78em;
+            animation: fadeIn 0.8s ease-out 1s both;
+        }
 
-    <div class="features">
-        <div class="feature-card">
-            <div class="feature-icon icon-purple">
-                ICON_SHIELD
-            </div>
-            <h3>Sicurezza Integrata</h3>
-            <p>Autenticazione JWT, chiavi crittografate con PGP e sessioni sicure con blacklist automatica.</p>
+        /* ── Responsive ──────────── */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.2em; }
+            .features { grid-template-columns: 1fr; gap: 16px; }
+            .hero { padding: 40px 0 30px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="landing-wrapper">
+        <div class="hero">
+            <div class="hero-badge">WPEX Orchestrator v2</div>
+            <h1>Gestisci i tuoi server<br/><span class="gradient-text">in modo semplice</span></h1>
+            <p>Monitora, controlla e gestisci le tue istanze WPEX da un'unica dashboard moderna. Provisioning automatico, gestione chiavi integrata e monitoraggio in tempo reale.</p>
+            <button class="hero-cta" onclick="window.parent.location.search='?page=login'">Get Started</button>
         </div>
-        <div class="feature-card">
-            <div class="feature-icon icon-green">
-                ICON_ZAP
-            </div>
-            <h3>Deploy Istantaneo</h3>
-            <p>Crea e avvia nuovi server con un click. Gestione Docker automatizzata con rete overlay condivisa.</p>
-        </div>
-        <div class="feature-card">
-            <div class="feature-icon icon-blue">
-                ICON_GLOBE
-            </div>
-            <h3>Monitoraggio Live</h3>
-            <p>Console integrata con iframe live, log in tempo reale e controlli rapidi per ogni istanza.</p>
-        </div>
-    </div>
 
-    <div class="landing-footer">
-        WPEX Orchestrator &mdash; Built with Streamlit & Docker Swarm
+        <div class="features">
+            <div class="feature-card">
+                <div class="feature-icon icon-purple">ICON_SHIELD</div>
+                <h3>Sicurezza Integrata</h3>
+                <p>Autenticazione JWT, chiavi crittografate con PGP e sessioni sicure con blacklist automatica.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon icon-green">ICON_ZAP</div>
+                <h3>Deploy Istantaneo</h3>
+                <p>Crea e avvia nuovi server con un click. Gestione Docker automatizzata con rete overlay condivisa.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon icon-blue">ICON_GLOBE</div>
+                <h3>Monitoraggio Live</h3>
+                <p>Console integrata con iframe live, log in tempo reale e controlli rapidi per ogni istanza.</p>
+            </div>
+        </div>
+
+        <div class="landing-footer">
+            WPEX Orchestrator &mdash; Built with Streamlit &amp; Docker Swarm
+        </div>
     </div>
-</div>
+</body>
+</html>
 """
 
 # Replace placeholders with actual SVGs

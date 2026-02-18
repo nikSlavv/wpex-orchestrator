@@ -455,14 +455,8 @@ if not st.session_state['logged_in']:
         st.rerun()
 
     if page == "landing" or page == "dashboard":
-        # Show landing page
-        st.markdown(LANDING_HTML, unsafe_allow_html=True)
-        
-        _spacer1, _cta_col, _spacer2 = st.columns([1, 1, 1])
-        with _cta_col:
-            if st.button("Get Started", key="cta_landing", type="primary", use_container_width=True):
-                st.query_params["page"] = "login"
-                st.rerun()
+        # Show landing page via components.html (renders full HTML properly)
+        components.html(LANDING_HTML, height=750, scrolling=False)
         
         st.stop()
 
