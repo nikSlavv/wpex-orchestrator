@@ -407,13 +407,13 @@ LANDING_HTML = """
         .landing-wrapper {
             max-width: 960px;
             margin: 0 auto;
-            padding: 20px 20px 40px;
+            padding: 10px 20px 20px;
             text-align: center;
         }
 
         /* ── Hero ─────────────────── */
         .hero {
-            padding: 60px 0 40px;
+            padding: 20px 0 16px;
             animation: fadeIn 0.8s ease-out;
         }
         .hero-badge {
@@ -425,7 +425,7 @@ LANDING_HTML = """
             background: rgba(124, 106, 239, 0.12);
             color: #9b8afb;
             border: 1px solid rgba(124, 106, 239, 0.25);
-            margin-bottom: 28px;
+            margin-bottom: 16px;
             letter-spacing: 0.8px;
             text-transform: uppercase;
             animation: fadeInUp 0.6s ease-out 0.2s both;
@@ -434,7 +434,7 @@ LANDING_HTML = """
             font-size: 3.4em;
             font-weight: 700;
             line-height: 1.12;
-            margin: 0 0 22px;
+            margin: 0 0 14px;
             animation: fadeInUp 0.7s ease-out 0.3s both;
         }
         .gradient-text {
@@ -449,7 +449,7 @@ LANDING_HTML = """
             font-size: 1.12em;
             color: #9090a8;
             max-width: 540px;
-            margin: 0 auto 36px;
+            margin: 0 auto 24px;
             line-height: 1.75;
             animation: fadeInUp 0.7s ease-out 0.45s both;
         }
@@ -479,14 +479,14 @@ LANDING_HTML = """
         .features {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 22px;
-            margin: 50px 0;
+            gap: 18px;
+            margin: 24px 0 20px;
         }
         .feature-card {
             background: rgba(255, 255, 255, 0.03);
             border: 1px solid rgba(255, 255, 255, 0.07);
             border-radius: 18px;
-            padding: 30px 22px;
+            padding: 24px 20px;
             text-align: left;
             transition: all 0.35s cubic-bezier(.4,0,.2,1);
             animation: fadeInUp 0.6s ease-out both;
@@ -540,7 +540,7 @@ LANDING_HTML = """
 
         /* ── Footer ──────────────── */
         .landing-footer {
-            padding: 28px 0;
+            padding: 18px 0;
             border-top: 1px solid rgba(255, 255, 255, 0.06);
             color: #606078;
             font-size: 0.78em;
@@ -561,7 +561,10 @@ LANDING_HTML = """
             <div class="hero-badge">WPEX Orchestrator v2</div>
             <h1>Gestisci i tuoi server<br/><span class="gradient-text">in modo semplice</span></h1>
             <p>Monitora, controlla e gestisci le tue istanze WPEX da un'unica dashboard moderna. Provisioning automatico, gestione chiavi integrata e monitoraggio in tempo reale.</p>
-            <button class="hero-cta" onclick="window.parent.location.search='?page=login'">Get Started</button>
+            <form action="/" method="GET" target="_top" style="display:inline">
+                <input type="hidden" name="page" value="login"/>
+                <button type="submit" class="hero-cta">Get Started</button>
+            </form>
         </div>
 
         <div class="features">

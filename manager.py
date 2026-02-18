@@ -456,7 +456,7 @@ if not st.session_state['logged_in']:
 
     if page == "landing" or page == "dashboard":
         # Show landing page via components.html (renders full HTML properly)
-        components.html(LANDING_HTML, height=750, scrolling=False)
+        components.html(LANDING_HTML, height=700, scrolling=False)
         
         st.stop()
 
