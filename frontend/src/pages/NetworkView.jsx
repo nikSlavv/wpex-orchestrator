@@ -4,7 +4,7 @@ import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import {
     Server, RefreshCw, Play, Square, Trash2, Plus, Activity,
-    Wifi, ArrowUpRight, ChevronRight, Search
+    Wifi, ArrowUpRight, ChevronRight, Search, Key
 } from 'lucide-react';
 
 export default function NetworkView() {
@@ -15,12 +15,19 @@ export default function NetworkView() {
     const [showCreate, setShowCreate] = useState(false);
     const [newName, setNewName] = useState('');
     const [newPort, setNewPort] = useState('');
+    const [availableKeys, setAvailableKeys] = useState([]);
+    const [selectedKeyIds, setSelectedKeyIds] = useState([]);
 
     const loadData = async () => {
         try {
-            const [s, k] = await Promise.all([api.getServers(), api.getDashboardKPI()]);
+            const [s, k, keys] = await Promise.all([
+                api.getServers(),
+                api.getDashboardKPI(),
+                api.getKeys().catch(() => ({ keys: [] }))
+            ]);
             setServers(s.servers || []);
             setKpi(k);
+            setAvailableKeys(keys.keys || keys || []);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
@@ -31,13 +38,20 @@ export default function NetworkView() {
         s.name.toLowerCase().includes(search.toLowerCase())
     );
 
+    const toggleKey = (keyId) => {
+        setSelectedKeyIds(prev =>
+            prev.includes(keyId) ? prev.filter(id => id !== keyId) : [...prev, keyId]
+        );
+    };
+
     const handleCreate = async () => {
         if (!newName.trim()) return;
         try {
-            await api.createServer(newName, parseInt(newPort) || 0, []);
+            await api.createServer(newName, parseInt(newPort) || 0, selectedKeyIds);
             setShowCreate(false);
             setNewName('');
             setNewPort('');
+            setSelectedKeyIds([]);
             loadData();
         } catch (e) { alert(e.message); }
     };
@@ -88,9 +102,43 @@ export default function NetworkView() {
                                 <label>Porta UDP</label>
                                 <input className="input" type="number" value={newPort} onChange={e => setNewPort(e.target.value)} placeholder="51820" />
                             </div>
-                            <div className="form-group" style={{ justifyContent: 'flex-end' }}>
-                                <button className="btn btn-primary" onClick={handleCreate}>Crea</button>
-                            </div>
+                        </div>
+                        <div style={{ marginTop: 12 }}>
+                            <label style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8, fontSize: '0.88rem', fontWeight: 600 }}>
+                                <Key size={14} /> Chiavi Autorizzate
+                            </label>
+                            {availableKeys.length === 0 ? (
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0 }}>
+                                    Nessuna chiave disponibile — creale dalla pagina <Link to="/keys" style={{ color: 'var(--accent-purple-light)' }}>Chiavi</Link>
+                                </p>
+                            ) : (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                                    {availableKeys.map(k => (
+                                        <label key={k.id} onClick={() => toggleKey(k.id)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 6,
+                                                padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
+                                                fontSize: '0.84rem', fontWeight: 500, transition: 'all 0.2s',
+                                                background: selectedKeyIds.includes(k.id)
+                                                    ? 'rgba(124,106,239,0.2)' : 'rgba(255,255,255,0.04)',
+                                                border: `1px solid ${selectedKeyIds.includes(k.id)
+                                                    ? 'rgba(124,106,239,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                                                color: selectedKeyIds.includes(k.id) ? '#9b8afb' : 'var(--text-secondary)',
+                                            }}>
+                                            <input type="checkbox" checked={selectedKeyIds.includes(k.id)}
+                                                onChange={() => { }} style={{ display: 'none' }} />
+                                            <Key size={12} />
+                                            {k.name || k.label || `Chiave #${k.id}`}
+                                        </label>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                            <button className="btn btn-secondary" onClick={() => { setShowCreate(false); setSelectedKeyIds([]); }}>Annulla</button>
+                            <button className="btn btn-primary" onClick={handleCreate}>
+                                <Plus size={14} /> Crea Relay
+                            </button>
                         </div>
                     </div>
                 )}
