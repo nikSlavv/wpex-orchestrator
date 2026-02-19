@@ -166,4 +166,14 @@ export const api = {
     // --- Audit ---
     getAuditLog: (params = {}) =>
         request(`/api/audit?${new URLSearchParams(params)}`),
+
+    // --- Users (RBAC) ---
+    getUsers: () =>
+        request('/api/auth/users'),
+
+    updateUserRole: (userId, role) =>
+        request(`/api/auth/users/${userId}/role`, { method: 'PUT', body: JSON.stringify({ role }) }),
+
+    updateUserTenant: (userId, tenant_id) =>
+        request(`/api/auth/users/${userId}/tenant`, { method: 'PUT', body: JSON.stringify({ tenant_id }) }),
 };

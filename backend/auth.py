@@ -157,3 +157,45 @@ def logout(response: Response, user=Depends(get_current_user)):
 def me(user=Depends(get_current_user)):
     return {"id": user["id"], "username": user["username"],
             "role": user.get("role", "engineer"), "tenant_id": user.get("tenant_id")}
+
+
+@router.get("/users")
+def list_users(user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo gli admin possono visualizzare gli utenti")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, username, role, tenant_id, created_at FROM users ORDER BY id")
+    rows = cur.fetchall()
+    conn.close()
+    return {"users": [{"id": r[0], "username": r[1], "role": r[2] or "engineer",
+                        "tenant_id": r[3], "created_at": str(r[4]) if r[4] else None} for r in rows]}
+
+
+@router.put("/users/{user_id}/role")
+def update_user_role(user_id: int, body: dict, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo gli admin possono modificare i ruoli")
+    role = body.get("role")
+    if role not in ("admin", "executive", "engineer"):
+        raise HTTPException(status_code=400, detail="Ruolo non valido")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Ruolo aggiornato", "user_id": user_id, "role": role}
+
+
+@router.put("/users/{user_id}/tenant")
+def update_user_tenant(user_id: int, body: dict, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo gli admin possono assegnare tenant")
+    tenant_id = body.get("tenant_id")
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET tenant_id = %s WHERE id = %s", (tenant_id, user_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Tenant aggiornato", "user_id": user_id, "tenant_id": tenant_id}
+

@@ -11,6 +11,7 @@ import TunnelList from './pages/TunnelList';
 import KeysPage from './pages/KeysPage';
 import ConfigManager from './pages/ConfigManager';
 import AuditLog from './pages/AuditLog';
+import SettingsPage from './pages/SettingsPage';
 
 function ProtectedRoute({ children }) {
     const { user, loading } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/keys" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />
             <Route path="/config" element={<ProtectedRoute><ConfigManager /></ProtectedRoute>} />
             <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
+            <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />
         </Routes>
     );
