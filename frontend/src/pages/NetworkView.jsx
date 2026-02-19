@@ -114,7 +114,7 @@ export default function NetworkView() {
                             ) : (
                                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                                     {availableKeys.map(k => (
-                                        <label key={k.id} onClick={() => toggleKey(k.id)}
+                                        <div key={k.id} onClick={() => toggleKey(k.id)}
                                             style={{
                                                 display: 'flex', alignItems: 'center', gap: 6,
                                                 padding: '6px 12px', borderRadius: 8, cursor: 'pointer',
@@ -124,12 +124,11 @@ export default function NetworkView() {
                                                 border: `1px solid ${selectedKeyIds.includes(k.id)
                                                     ? 'rgba(124,106,239,0.5)' : 'rgba(255,255,255,0.08)'}`,
                                                 color: selectedKeyIds.includes(k.id) ? '#9b8afb' : 'var(--text-secondary)',
+                                                userSelect: 'none',
                                             }}>
-                                            <input type="checkbox" checked={selectedKeyIds.includes(k.id)}
-                                                onChange={() => { }} style={{ display: 'none' }} />
                                             <Key size={12} />
                                             {k.name || k.label || `Chiave #${k.id}`}
-                                        </label>
+                                        </div>
                                     ))}
                                 </div>
                             )}
