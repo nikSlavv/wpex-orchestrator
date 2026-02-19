@@ -1,9 +1,11 @@
 """
 WPEX Orchestrator — Database Layer
 Connection management, schema init, and migrations.
+Supports multi-tenant SaaS architecture.
 """
 import os
 import psycopg2
+import secrets
 
 # --- CONFIG ---
 DB_HOST = os.getenv("DB_HOST", "db")
@@ -26,12 +28,18 @@ def get_db():
     return psycopg2.connect(host=DB_HOST, database=DB_NAME, user=DB_USER, password=DB_PASS)
 
 
+def generate_api_key():
+    """Generate a secure random API key."""
+    return secrets.token_urlsafe(48)
+
+
 def init_db():
     """Create tables if they don't exist."""
     conn = get_db()
     cur = conn.cursor()
     cur.execute("CREATE EXTENSION IF NOT EXISTS pgcrypto;")
 
+    # ── Original tables ──────────────────────────────────
     cur.execute("""
         CREATE TABLE IF NOT EXISTS access_keys (
             id SERIAL PRIMARY KEY,
@@ -76,6 +84,80 @@ def init_db():
         );
     """)
 
+    # ── SaaS Multi-tenant tables ─────────────────────────
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tenants (
+            id SERIAL PRIMARY KEY,
+            name VARCHAR(100) UNIQUE NOT NULL,
+            slug VARCHAR(50) UNIQUE NOT NULL,
+            max_tunnels INT DEFAULT 10,
+            max_bandwidth_mbps INT DEFAULT 100,
+            sla_target DECIMAL(5,2) DEFAULT 99.9,
+            allowed_regions TEXT[] DEFAULT '{}',
+            preferred_relay_ids INT[],
+            api_key VARCHAR(100) UNIQUE,
+            billing_integration_id VARCHAR(100),
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS sites (
+            id SERIAL PRIMARY KEY,
+            tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
+            name VARCHAR(100) NOT NULL,
+            region VARCHAR(50),
+            public_ip VARCHAR(45),
+            subnet VARCHAR(50),
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS tunnels (
+            id SERIAL PRIMARY KEY,
+            tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
+            site_a_id INT REFERENCES sites(id),
+            site_b_id INT REFERENCES sites(id),
+            relay_id INT REFERENCES servers(id),
+            status VARCHAR(20) DEFAULT 'pending',
+            config_json JSONB DEFAULT '{}',
+            config_version INT DEFAULT 1,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(site_a_id, site_b_id)
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS relay_config_versions (
+            id SERIAL PRIMARY KEY,
+            relay_id INT REFERENCES servers(id) ON DELETE CASCADE,
+            version INT NOT NULL,
+            config_json JSONB NOT NULL,
+            diff_from_previous JSONB,
+            created_by INT REFERENCES users(id),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(relay_id, version)
+        );
+    """)
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS audit_log (
+            id SERIAL PRIMARY KEY,
+            user_id INT,
+            action VARCHAR(100) NOT NULL,
+            entity_type VARCHAR(50),
+            entity_id INT,
+            details JSONB,
+            ip_address VARCHAR(45),
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );
+    """)
+
     conn.commit()
     conn.close()
 
@@ -85,7 +167,17 @@ def migrate_db():
     conn = get_db()
     try:
         cur = conn.cursor()
+        # Original migration
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS web_port INT DEFAULT 8080;")
+        # SaaS migrations — RBAC fields on users
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS role VARCHAR(20) DEFAULT 'engineer';")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id INT;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(100);")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ip_whitelist TEXT[];")
+        # Relay tenant association
+        cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS tenant_id INT;")
+        cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS region VARCHAR(50);")
+        cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';")
         conn.commit()
     except:
         pass

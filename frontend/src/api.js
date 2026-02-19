@@ -1,5 +1,5 @@
 /**
- * WPEX Orchestrator — API Client
+ * WPEX Orchestrator SaaS — API Client
  * Handles all fetch calls with JWT auth.
  */
 
@@ -49,7 +49,7 @@ export const api = {
     me: () =>
         request('/api/auth/me'),
 
-    // --- Servers ---
+    // --- Servers (legacy) ---
     getServers: () =>
         request('/api/servers'),
 
@@ -80,4 +80,90 @@ export const api = {
 
     deleteKey: (id) =>
         request(`/api/keys/${id}`, { method: 'DELETE' }),
+
+    // --- Dashboard KPI ---
+    getDashboardKPI: () =>
+        request('/api/dashboard/kpi'),
+
+    getDashboardAlerts: () =>
+        request('/api/dashboard/alerts'),
+
+    getTopologyData: () =>
+        request('/api/dashboard/topology'),
+
+    // --- Tenants ---
+    getTenants: () =>
+        request('/api/tenants'),
+
+    createTenant: (data) =>
+        request('/api/tenants', { method: 'POST', body: JSON.stringify(data) }),
+
+    getTenant: (id) =>
+        request(`/api/tenants/${id}`),
+
+    updateTenant: (id, data) =>
+        request(`/api/tenants/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+
+    deleteTenant: (id) =>
+        request(`/api/tenants/${id}`, { method: 'DELETE' }),
+
+    getSites: (tenantId) =>
+        request(`/api/tenants/${tenantId}/sites`),
+
+    createSite: (tenantId, data) =>
+        request(`/api/tenants/${tenantId}/sites`, { method: 'POST', body: JSON.stringify(data) }),
+
+    deleteSite: (tenantId, siteId) =>
+        request(`/api/tenants/${tenantId}/sites/${siteId}`, { method: 'DELETE' }),
+
+    getTenantUsage: (tenantId) =>
+        request(`/api/tenants/${tenantId}/usage`),
+
+    // --- Tunnels ---
+    getTunnels: (params = {}) =>
+        request(`/api/tunnels?${new URLSearchParams(params)}`),
+
+    createTunnel: (data) =>
+        request('/api/tunnels', { method: 'POST', body: JSON.stringify(data) }),
+
+    getTunnel: (id) =>
+        request(`/api/tunnels/${id}`),
+
+    deleteTunnel: (id) =>
+        request(`/api/tunnels/${id}`, { method: 'DELETE' }),
+
+    updateTunnelConfig: (id, config_json) =>
+        request(`/api/tunnels/${id}/config`, { method: 'PUT', body: JSON.stringify({ config_json }) }),
+
+    getConfigHistory: (id) =>
+        request(`/api/tunnels/${id}/config/history`),
+
+    rollbackConfig: (id, version) =>
+        request(`/api/tunnels/${id}/config/rollback/${version}`, { method: 'POST' }),
+
+    // --- Relay Enhanced ---
+    getRelayStats: (id) =>
+        request(`/api/relays/${id}/stats`),
+
+    getRelayHealth: (id) =>
+        request(`/api/relays/${id}/health`),
+
+    getRelayContainer: (id) =>
+        request(`/api/relays/${id}/container`),
+
+    restartRelay: (id) =>
+        request(`/api/relays/${id}/restart`, { method: 'POST' }),
+
+    upgradeRelay: (id, image) =>
+        request(`/api/relays/${id}/upgrade`, { method: 'POST', body: JSON.stringify({ image }) }),
+
+    pingFromRelay: (id, target) =>
+        request(`/api/relays/${id}/diagnostics/ping`, { method: 'POST', body: JSON.stringify({ target }) }),
+
+    tracerouteFromRelay: (id, target) =>
+        request(`/api/relays/${id}/diagnostics/traceroute`, { method: 'POST', body: JSON.stringify({ target }) }),
+
+    // --- Audit ---
+    getAuditLog: (params = {}) =>
+        request(`/api/audit?${new URLSearchParams(params)}`),
 };

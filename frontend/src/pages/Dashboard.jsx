@@ -1,309 +1,179 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../AuthContext';
+import { Link } from 'react-router-dom';
+import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import {
-    LayoutDashboard, Plus, Play, Square, Trash2, Monitor, Key,
-    LogOut, User, ChevronDown, ChevronUp, Database, Server
+    Server, Link2, Users, Activity, AlertTriangle, AlertCircle,
+    ArrowUp, ArrowDown, Wifi, Shield, RefreshCw, ChevronRight
 } from 'lucide-react';
 
+function HealthRing({ value, size = 56 }) {
+    const radius = (size - 8) / 2;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (value / 100) * circumference;
+    const color = value >= 80 ? '#34d399' : value >= 50 ? '#fbbf24' : '#f87171';
+
+    return (
+        <div className="health-ring" style={{ width: size, height: size }}>
+            <svg width={size} height={size}>
+                <circle className="health-ring-bg"
+                    cx={size / 2} cy={size / 2} r={radius}
+                    fill="none" strokeWidth="4" />
+                <circle className="health-ring-fill"
+                    cx={size / 2} cy={size / 2} r={radius}
+                    fill="none" stroke={color} strokeWidth="4"
+                    strokeDasharray={circumference}
+                    strokeDashoffset={offset}
+                    strokeLinecap="round" />
+            </svg>
+            <div className="health-ring-text" style={{ color }}>{Math.round(value)}</div>
+        </div>
+    );
+}
+
 export default function Dashboard() {
-    const { user, logout } = useAuth();
-    const navigate = useNavigate();
-    const [tab, setTab] = useState('servers');
-    const [servers, setServers] = useState([]);
-    const [keys, setKeys] = useState([]);
-    const [hostIp, setHostIp] = useState('');
+    const [kpi, setKpi] = useState(null);
+    const [alerts, setAlerts] = useState(null);
     const [loading, setLoading] = useState(true);
 
-    // New server form
-    const [showNewServer, setShowNewServer] = useState(false);
-    const [newName, setNewName] = useState('');
-    const [newPort, setNewPort] = useState(40000);
-    const [newKeyIds, setNewKeyIds] = useState([]);
-
-    // New key form
-    const [newAlias, setNewAlias] = useState('');
-    const [newKeyVal, setNewKeyVal] = useState('');
-
-    // Expanded states
-    const [expandedKeys, setExpandedKeys] = useState({});
-    const [expandedLogs, setExpandedLogs] = useState({});
-    const [serverLogs, setServerLogs] = useState({});
-
-    const refresh = useCallback(async () => {
+    const loadData = useCallback(async () => {
         try {
-            const [srvData, keyData] = await Promise.all([api.getServers(), api.getKeys()]);
-            setServers(srvData.servers);
-            setHostIp(srvData.host_ip);
-            setKeys(keyData.keys);
-        } catch { } finally {
+            const [k, a] = await Promise.all([
+                api.getDashboardKPI(),
+                api.getDashboardAlerts()
+            ]);
+            setKpi(k);
+            setAlerts(a);
+        } catch (e) {
+            console.error('KPI load error:', e);
+        } finally {
             setLoading(false);
         }
     }, []);
 
-    useEffect(() => { refresh(); }, [refresh]);
-
-    const handleCreateServer = async (e) => {
-        e.preventDefault();
-        if (!newName || !newKeyIds.length) return;
-        try {
-            await api.createServer(newName, newPort, newKeyIds);
-            setNewName(''); setNewPort(40000); setNewKeyIds([]); setShowNewServer(false);
-            refresh();
-        } catch { }
-    };
-
-    const handleDeleteServer = async (id) => {
-        if (!confirm('Eliminare questo server?')) return;
-        await api.deleteServer(id);
-        refresh();
-    };
-
-    const handleAction = async (id, action) => {
-        if (action === 'start') await api.startServer(id);
-        if (action === 'stop') await api.stopServer(id);
-        refresh();
-    };
-
-    const toggleLogs = async (srv) => {
-        const key = srv.id;
-        if (expandedLogs[key]) {
-            setExpandedLogs(p => ({ ...p, [key]: false }));
-        } else {
-            const data = await api.getServerLogs(key);
-            setServerLogs(p => ({ ...p, [key]: data.logs }));
-            setExpandedLogs(p => ({ ...p, [key]: true }));
-        }
-    };
-
-    const handleUpdateKeys = async (serverId, keyIds) => {
-        await api.updateServerKeys(serverId, keyIds);
-        refresh();
-    };
-
-    const handleCreateKey = async (e) => {
-        e.preventDefault();
-        if (!newAlias || !newKeyVal) return;
-        await api.createKey(newAlias, newKeyVal);
-        setNewAlias(''); setNewKeyVal('');
-        refresh();
-    };
-
-    const handleDeleteKey = async (id) => {
-        await api.deleteKey(id);
-        refresh();
-    };
-
-    const toggleKeyId = (id) => {
-        setNewKeyIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
-    };
-
-    const handleLogout = async () => {
-        await logout();
-        navigate('/');
-    };
-
-    if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
+    useEffect(() => { loadData(); const i = setInterval(loadData, 30000); return () => clearInterval(i); }, [loadData]);
 
     return (
         <div className="page">
-            {/* Sidebar */}
-            <nav className="sidebar">
-                <div className="sidebar-brand">
-                    <LayoutDashboard size={22} /> WPEX Orchestrator
-                </div>
-
-                <div className="tabs" style={{ flexDirection: 'column', background: 'transparent', padding: 0 }}>
-                    <button className={`tab ${tab === 'servers' ? 'active' : ''}`} onClick={() => setTab('servers')}
-                        style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Server size={16} /> Server & Istanze
-                    </button>
-                    <button className={`tab ${tab === 'keys' ? 'active' : ''}`} onClick={() => setTab('keys')}
-                        style={{ textAlign: 'left', display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <Database size={16} /> Database Chiavi
-                    </button>
-                </div>
-
-                <div className="sidebar-user">
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <User size={16} /> {user?.username}
-                    </span>
-                    <button className="btn btn-sm" onClick={handleLogout} title="Logout">
-                        <LogOut size={14} />
-                    </button>
-                </div>
-            </nav>
-
-            {/* Main */}
+            <Sidebar />
             <div className="main-content">
                 <div className="page-header">
-                    <h1 className="page-title">
-                        {tab === 'servers' ? <><Server size={24} /> Server & Istanze</> : <><Database size={24} /> Chiavi Globali</>}
-                    </h1>
-                    <span className="badge">Host: <code style={{ marginLeft: 4 }}>{hostIp}</code></span>
+                    <h1 className="page-title"><Activity size={26} /> Executive Overview</h1>
+                    <button className="btn btn-sm" onClick={loadData}>
+                        <RefreshCw size={14} /> Aggiorna
+                    </button>
                 </div>
 
-                {/* ═══ SERVERS TAB ═══ */}
-                {tab === 'servers' && (
+                {loading ? (
+                    <div className="loading-screen"><div className="spinner" /></div>
+                ) : kpi ? (
                     <>
-                        {/* New Server Expander */}
-                        <div className="expander">
-                            <div className="expander-header" onClick={() => setShowNewServer(!showNewServer)}>
-                                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <Plus size={16} /> Aggiungi Nuovo Server
-                                </span>
-                                {showNewServer ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                            </div>
-                            {showNewServer && (
-                                <div className="expander-body">
-                                    <form onSubmit={handleCreateServer}>
-                                        <div className="form-row">
-                                            <div className="form-group">
-                                                <label>Nome Server</label>
-                                                <input className="input" value={newName} onChange={e => setNewName(e.target.value)} placeholder="es. alpha" />
-                                            </div>
-                                            <div className="form-group">
-                                                <label>Porta UDP</label>
-                                                <input className="input" type="number" value={newPort} onChange={e => setNewPort(+e.target.value)} />
-                                            </div>
-                                        </div>
-                                        <div className="form-group" style={{ marginTop: 12 }}>
-                                            <label>Chiavi</label>
-                                            <div className="checkbox-list">
-                                                {keys.length === 0 && <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nessuna chiave — creane una prima</span>}
-                                                {keys.map(k => (
-                                                    <label key={k.id} className="checkbox-item">
-                                                        <input type="checkbox" checked={newKeyIds.includes(k.id)} onChange={() => toggleKeyId(k.id)} />
-                                                        {k.alias}
-                                                    </label>
-                                                ))}
-                                            </div>
-                                        </div>
-                                        <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>
-                                            <Plus size={14} /> Crea Server
-                                        </button>
-                                    </form>
+                        {/* KPI Cards */}
+                        <div className="kpi-grid">
+                            <div className="kpi-card">
+                                <div className="kpi-label"><Server size={14} /> Relay Attivi</div>
+                                <div className={`kpi-value ${kpi.relays_active === kpi.relays_total ? 'green' : 'amber'}`}>
+                                    {kpi.relays_active}/{kpi.relays_total}
                                 </div>
-                            )}
+                                <div className="kpi-sub">{kpi.relays_total - kpi.relays_active} inattivi</div>
+                            </div>
+                            <div className="kpi-card">
+                                <div className="kpi-label"><Link2 size={14} /> Tunnel</div>
+                                <div className="kpi-value blue">{kpi.tunnels_active}/{kpi.tunnels_total}</div>
+                                <div className="kpi-sub">{kpi.tunnels_degraded} degradati</div>
+                            </div>
+                            <div className="kpi-card">
+                                <div className="kpi-label"><Users size={14} /> Tenants</div>
+                                <div className="kpi-value purple">{kpi.tenants_active}</div>
+                                <div className="kpi-sub">Organizzazioni attive</div>
+                            </div>
+                            <div className="kpi-card">
+                                <div className="kpi-label"><Wifi size={14} /> Peers</div>
+                                <div className="kpi-value green">{kpi.total_peers}</div>
+                                <div className="kpi-sub">{kpi.bandwidth_aggregated_mb} MB trasferiti</div>
+                            </div>
+                            <div className="kpi-card">
+                                <div className="kpi-label"><Shield size={14} /> Health Score</div>
+                                <div className="kpi-value" style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                                    <HealthRing value={kpi.global_health_score} size={48} />
+                                    <span className={kpi.global_health_score >= 80 ? 'green' : kpi.global_health_score >= 50 ? 'amber' : 'red'}>
+                                        {kpi.global_health_score}%
+                                    </span>
+                                </div>
+                            </div>
                         </div>
 
-                        {/* Server List */}
-                        {servers.length === 0 && (
-                            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
-                                Nessun server attivo. Crea il primo!
-                            </div>
-                        )}
-
-                        {servers.map((srv, i) => (
-                            <div key={srv.id} className="card server-card" style={{ marginBottom: 16, animationDelay: `${i * 0.08}s` }}>
+                        <div className="grid-2">
+                            {/* Alerts */}
+                            <div className="card">
                                 <div className="card-header">
-                                    <div className="card-title">
-                                        <span className={`status-dot ${srv.status}`} />
-                                        wpex-{srv.name}
-                                    </div>
-                                    <div className="status-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                        <span className="badge">UDP: {srv.udp_port}</span>
-                                        <span className="badge badge-blue">Web: {srv.web_port}</span>
-                                    </div>
+                                    <h3 className="card-title">
+                                        <AlertTriangle size={18} /> Alerts
+                                        {alerts && alerts.critical > 0 && (
+                                            <span className="badge" style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--accent-red)', borderColor: 'rgba(248,113,113,0.3)' }}>
+                                                {alerts.critical} critici
+                                            </span>
+                                        )}
+                                    </h3>
                                 </div>
-
-                                <div className="server-actions">
-                                    <button className="btn btn-sm" onClick={() => handleAction(srv.id, 'start')} disabled={srv.status === 'running'}>
-                                        <Play size={14} /> Start
-                                    </button>
-                                    <button className="btn btn-sm" onClick={() => handleAction(srv.id, 'stop')} disabled={srv.status !== 'running'}>
-                                        <Square size={14} /> Stop
-                                    </button>
-                                    <button className="btn btn-sm" onClick={() => navigate(`/server/${srv.name}`)}>
-                                        <Monitor size={14} /> Console
-                                    </button>
-                                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteServer(srv.id)}>
-                                        <Trash2 size={14} /> Delete
-                                    </button>
+                                <div className="alert-list">
+                                    {alerts && alerts.alerts.length > 0 ? alerts.alerts.map((a, i) => (
+                                        <div key={i} className={`alert-item ${a.severity}`}>
+                                            {a.severity === 'critical' ? <AlertCircle size={16} /> : <AlertTriangle size={16} />}
+                                            <span>{a.message}</span>
+                                        </div>
+                                    )) : (
+                                        <div className="empty-state" style={{ padding: '24px' }}>
+                                            <Shield size={32} />
+                                            <p>Nessun alert attivo</p>
+                                        </div>
+                                    )}
                                 </div>
-
-                                {/* Key Management */}
-                                <div className="collapsible-header" onClick={() => setExpandedKeys(p => ({ ...p, [srv.id]: !p[srv.id] }))}>
-                                    <span><Key size={14} style={{ marginRight: 6 }} /> Chiavi ({srv.keys.length})</span>
-                                    {expandedKeys[srv.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                </div>
-                                <div className={`collapsible-content ${expandedKeys[srv.id] ? 'open' : ''}`}>
-                                    <div className="checkbox-list" style={{ marginBottom: 8 }}>
-                                        {keys.map(k => (
-                                            <label key={k.id} className="checkbox-item">
-                                                <input
-                                                    type="checkbox"
-                                                    checked={srv.keys.some(sk => sk.id === k.id)}
-                                                    onChange={() => {
-                                                        const current = srv.keys.map(sk => sk.id);
-                                                        const updated = current.includes(k.id)
-                                                            ? current.filter(x => x !== k.id)
-                                                            : [...current, k.id];
-                                                        handleUpdateKeys(srv.id, updated);
-                                                    }}
-                                                />
-                                                {k.alias}
-                                            </label>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Logs */}
-                                <div className="collapsible-header" onClick={() => toggleLogs(srv)}>
-                                    <span>Logs</span>
-                                    {expandedLogs[srv.id] ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
-                                </div>
-                                {expandedLogs[srv.id] && (
-                                    <div className="code-block">{serverLogs[srv.id] || 'Caricamento...'}</div>
-                                )}
                             </div>
-                        ))}
-                    </>
-                )}
 
-                {/* ═══ KEYS TAB ═══ */}
-                {tab === 'keys' && (
-                    <>
-                        <div className="card" style={{ marginBottom: 24 }}>
-                            <form onSubmit={handleCreateKey}>
-                                <div className="form-row">
-                                    <div className="form-group">
-                                        <label>Nome / Alias</label>
-                                        <input className="input" value={newAlias} onChange={e => setNewAlias(e.target.value)} placeholder="es. chiave-principale" />
-                                    </div>
-                                    <div className="form-group">
-                                        <label>Chiave</label>
-                                        <input className="input" type="password" value={newKeyVal} onChange={e => setNewKeyVal(e.target.value)} placeholder="Il valore della chiave" />
-                                    </div>
+                            {/* Relay Health List */}
+                            <div className="card">
+                                <div className="card-header">
+                                    <h3 className="card-title"><Server size={18} /> Relay Health</h3>
+                                    <Link to="/relays" className="btn btn-sm"><ChevronRight size={14} /></Link>
                                 </div>
-                                <button className="btn btn-primary" type="submit" style={{ marginTop: 12 }}>
-                                    <Plus size={14} /> Aggiungi Chiave
-                                </button>
-                            </form>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                                    {kpi.relays.map((r) => (
+                                        <Link key={r.id} to={`/relays/${r.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                                            <div className="health-gauge">
+                                                <HealthRing value={r.health} size={40} />
+                                                <div style={{ flex: 1 }}>
+                                                    <div className="health-label">{r.name}</div>
+                                                    <div className="health-detail">
+                                                        <span className={`status-dot ${r.status}`} style={{ marginRight: 6 }} />
+                                                        {r.status} • {r.peers_count} peers
+                                                    </div>
+                                                </div>
+                                                <div style={{ textAlign: 'right' }}>
+                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{r.health}%</div>
+                                                    <div className="health-detail">
+                                                        <ArrowUp size={10} /> {Math.round(r.bytes_transferred / 1024)}KB
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </Link>
+                                    ))}
+                                    {kpi.relays.length === 0 && (
+                                        <div className="empty-state" style={{ padding: '24px' }}>
+                                            <Server size={32} />
+                                            <p>Nessun relay configurato</p>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
-
-                        {keys.length === 0 && (
-                            <div className="card" style={{ textAlign: 'center', color: 'var(--text-muted)', padding: 40 }}>
-                                Nessuna chiave presente.
-                            </div>
-                        )}
-
-                        {keys.map((k, i) => (
-                            <div key={k.id} className="card" style={{ marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'space-between', animationDelay: `${i * 0.05}s`, animation: 'fadeInUp 0.3s ease-out both' }}>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                                    <Key size={16} style={{ color: 'var(--accent-purple-light)' }} />
-                                    <strong>{k.alias}</strong>
-                                </div>
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                                    <span className="secret">{k.key}</span>
-                                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteKey(k.id)}>
-                                        <Trash2 size={14} />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
                     </>
+                ) : (
+                    <div className="empty-state">
+                        <AlertCircle size={48} />
+                        <h3>Errore nel caricamento dei dati</h3>
+                        <button className="btn btn-sm" onClick={loadData}>Riprova</button>
+                    </div>
                 )}
             </div>
         </div>

@@ -69,7 +69,25 @@ def get_current_user(request: Request):
     payload = verify_jwt_token(token)
     if not payload:
         raise HTTPException(status_code=401, detail="Token non valido o scaduto")
-    return {"id": int(payload["sub"]), "username": payload["name"], "token": token}
+
+    # Fetch role and tenant from DB
+    user_id = int(payload["sub"])
+    role = "engineer"
+    tenant_id = None
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT role, tenant_id FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        if row:
+            role = row[0] or "engineer"
+            tenant_id = row[1]
+        conn.close()
+    except:
+        pass
+
+    return {"id": user_id, "username": payload["name"], "token": token,
+            "role": role, "tenant_id": tenant_id}
 
 
 # --- Endpoints ---
@@ -137,4 +155,5 @@ def logout(response: Response, user=Depends(get_current_user)):
 
 @router.get("/me")
 def me(user=Depends(get_current_user)):
-    return {"id": user["id"], "username": user["username"]}
+    return {"id": user["id"], "username": user["username"],
+            "role": user.get("role", "engineer"), "tenant_id": user.get("tenant_id")}
