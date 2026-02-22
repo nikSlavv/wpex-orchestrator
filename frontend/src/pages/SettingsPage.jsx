@@ -166,11 +166,11 @@ export default function SettingsPage() {
                                 </div>
                                 <div style={{ background: 'rgba(52, 211, 153, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #34d399' }}>
                                     <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Engineer</strong>
-                                    Gestione completa per la propria organizzazione. Può approvare utenti del proprio tenant (Scopato al Tenant).
+                                    Gestione completa per la propria organizzazione. Può approvare utenti del proprio tenant (Limitato all'Org).
                                 </div>
                                 <div style={{ background: 'rgba(156, 163, 175, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #9ca3af' }}>
                                     <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Viewer</strong>
-                                    Visione limitata alle risorse della propria organizzazione. Nessuna modifica (Scopato al Tenant).
+                                    Visione limitata alle risorse della propria organizzazione. Nessuna modifica (Limitato all'Org).
                                 </div>
                             </div>
                         </div>
@@ -245,7 +245,7 @@ export default function SettingsPage() {
                                                             style={{ width: 130, padding: '4px 8px', fontSize: '0.82rem' }}
                                                         >
                                                             {user?.role === 'admin' && <option value="admin">Admin</option>}
-                                                            <option value="executive">Executive</option>
+                                                            {user?.role === 'admin' && <option value="executive">Executive</option>}
                                                             <option value="engineer">Engineer</option>
                                                             <option value="viewer">Viewer</option>
                                                         </select>

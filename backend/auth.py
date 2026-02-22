@@ -204,8 +204,28 @@ def update_user_role(user_id: int, body: dict, user=Depends(get_current_user)):
     role = body.get("role")
     if role not in ("admin", "executive", "engineer", "viewer"):
         raise HTTPException(status_code=400, detail="Ruolo non valido")
+        
     conn = get_db()
     cur = conn.cursor()
+    
+    # RBAC rules
+    if user.get("role") == "admin":
+        pass # Admin can do anything
+    elif user.get("role") == "engineer":
+        if role in ("admin", "executive"):
+            conn.close()
+            raise HTTPException(status_code=403, detail="Non puoi assegnare un ruolo con visibilità globale")
+            
+        # Ensure user belongs to the same tenant
+        cur.execute("SELECT tenant_id FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        if not row or row[0] != user.get("tenant_id"):
+            conn.close()
+            raise HTTPException(status_code=403, detail="Puoi gestire solo utenti del tuo tenant")
+    else:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+
     cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
     conn.commit()
     conn.close()
