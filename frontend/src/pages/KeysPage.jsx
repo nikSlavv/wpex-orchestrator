@@ -48,10 +48,27 @@ export default function KeysPage() {
         try { await api.deleteKey(id); loadData(); } catch (e) { alert(e.message); }
     };
 
-    const copyKey = (id, key) => {
-        navigator.clipboard.writeText(key);
-        setCopiedKey(id);
-        setTimeout(() => setCopiedKey(null), 2000);
+    const copyKey = async (id, key) => {
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(key);
+            } else {
+                // Fallback approach if running without secure context (http://ip)
+                const textArea = document.createElement("textarea");
+                textArea.value = key;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+            setCopiedKey(id);
+            setTimeout(() => setCopiedKey(null), 2000);
+        } catch (err) {
+            console.error("Copia fallita:", err);
+            alert("Il tuo browser blocca la copia automatica. Seleziona il testo manualmente.");
+        }
     };
 
     return (
@@ -105,6 +122,14 @@ export default function KeysPage() {
                     <div className="loading-screen"><div className="spinner" /></div>
                 ) : (
                     <div className="card">
+                        <div style={{ marginBottom: 16, padding: '12px 16px', background: 'rgba(124, 106, 239, 0.08)', borderLeft: '3px solid var(--accent-purple)', borderRadius: 4, display: 'flex', gap: 12, alignItems: 'center' }}>
+                            <div style={{ color: 'var(--accent-purple-light)' }}>
+                                <Key size={18} />
+                            </div>
+                            <div style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>
+                                Passa il mouse sulla chiave per rivelare il valore. <strong>Clicca per copiarla</strong> negli appunti.
+                            </div>
+                        </div>
                         <table className="data-table">
                             <thead>
                                 <tr>
@@ -117,22 +142,26 @@ export default function KeysPage() {
                                         <td>#{k.id}</td>
                                         <td style={{ fontWeight: 600 }}>{k.alias}</td>
                                         <td>
-                                            <div style={{ position: 'relative', display: 'inline-block' }}>
+                                            <div className="secret-group">
                                                 <span
                                                     className="secret"
                                                     onClick={() => copyKey(k.id, k.key)}
-                                                    title="Clicca per copiare"
                                                 >
                                                     {k.key}
                                                 </span>
-                                                {copiedKey === k.id && (
+                                                {copiedKey === k.id ? (
                                                     <span style={{
-                                                        position: 'absolute', top: -24, left: '50%', transform: 'translateX(-50%)',
-                                                        background: 'var(--bg-secondary)', color: 'var(--accent-green)',
-                                                        fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap',
-                                                        border: '1px solid var(--border-subtle)', animation: 'fadeInUp 0.2s ease-out'
+                                                        position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)',
+                                                        background: 'var(--bg-card)', color: 'var(--accent-green)',
+                                                        fontSize: '0.75rem', padding: '4px 8px', borderRadius: 4, whiteSpace: 'nowrap',
+                                                        border: '1px solid var(--border-subtle)', animation: 'fadeInUp 0.15s ease-out',
+                                                        zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
                                                     }}>
                                                         Copiata! <Check size={10} style={{ display: 'inline', marginLeft: 2 }} />
+                                                    </span>
+                                                ) : (
+                                                    <span className="hover-msg">
+                                                        Clicca per copiare
                                                     </span>
                                                 )}
                                             </div>
