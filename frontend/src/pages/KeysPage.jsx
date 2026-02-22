@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { api } from '../api';
-import { Key, Plus, Trash2, RefreshCw, Eye, EyeOff, Copy } from 'lucide-react';
+import { Key, Plus, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 
 export default function KeysPage() {
@@ -12,7 +12,7 @@ export default function KeysPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [alias, setAlias] = useState('');
     const [keyValue, setKeyValue] = useState('');
-    const [revealedKeys, setRevealedKeys] = useState(new Set());
+    const [copiedKey, setCopiedKey] = useState(null);
     const [tenants, setTenants] = useState([]);
     const [selectedTenant, setSelectedTenant] = useState('');
 
@@ -48,14 +48,10 @@ export default function KeysPage() {
         try { await api.deleteKey(id); loadData(); } catch (e) { alert(e.message); }
     };
 
-    const toggleReveal = (id) => {
-        const s = new Set(revealedKeys);
-        s.has(id) ? s.delete(id) : s.add(id);
-        setRevealedKeys(s);
-    };
-
-    const copyKey = (key) => {
+    const copyKey = (id, key) => {
         navigator.clipboard.writeText(key);
+        setCopiedKey(id);
+        setTimeout(() => setCopiedKey(null), 2000);
     };
 
     return (
@@ -121,18 +117,28 @@ export default function KeysPage() {
                                         <td>#{k.id}</td>
                                         <td style={{ fontWeight: 600 }}>{k.alias}</td>
                                         <td>
-                                            <code style={{ fontSize: '0.8rem', color: revealedKeys.has(k.id) ? 'var(--text-secondary)' : 'transparent', background: revealedKeys.has(k.id) ? 'transparent' : 'var(--bg-secondary)', padding: '2px 6px', borderRadius: 4 }}>
-                                                {k.key}
-                                            </code>
+                                            <div style={{ position: 'relative', display: 'inline-block' }}>
+                                                <span
+                                                    className="secret"
+                                                    onClick={() => copyKey(k.id, k.key)}
+                                                    title="Clicca per copiare"
+                                                >
+                                                    {k.key}
+                                                </span>
+                                                {copiedKey === k.id && (
+                                                    <span style={{
+                                                        position: 'absolute', top: -24, left: '50%', transform: 'translateX(-50%)',
+                                                        background: 'var(--bg-secondary)', color: 'var(--accent-green)',
+                                                        fontSize: '0.7rem', padding: '2px 6px', borderRadius: 4, whiteSpace: 'nowrap',
+                                                        border: '1px solid var(--border-subtle)', animation: 'fadeInUp 0.2s ease-out'
+                                                    }}>
+                                                        Copiata! <Check size={10} style={{ display: 'inline', marginLeft: 2 }} />
+                                                    </span>
+                                                )}
+                                            </div>
                                         </td>
                                         <td>
                                             <div style={{ display: 'flex', gap: 4 }}>
-                                                <button className="btn btn-sm" onClick={() => toggleReveal(k.id)} title={revealedKeys.has(k.id) ? 'Nascondi' : 'Mostra'}>
-                                                    {revealedKeys.has(k.id) ? <EyeOff size={12} /> : <Eye size={12} />}
-                                                </button>
-                                                <button className="btn btn-sm" onClick={() => copyKey(k.key)} title="Copia">
-                                                    <Copy size={12} />
-                                                </button>
                                                 {canMutate && (
                                                     <button className="btn btn-sm btn-danger" onClick={() => handleDelete(k.id)}>
                                                         <Trash2 size={12} />
