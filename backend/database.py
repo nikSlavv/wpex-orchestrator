@@ -45,6 +45,7 @@ def init_db():
             id SERIAL PRIMARY KEY,
             alias VARCHAR(50),
             key_value BYTEA NOT NULL,
+            tenant_id INT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -181,6 +182,8 @@ def migrate_db():
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS tenant_id INT;")
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS region VARCHAR(50);")
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';")
+        # Access Keys tenant isolation
+        cur.execute("ALTER TABLE access_keys ADD COLUMN IF NOT EXISTS tenant_id INT;")
         conn.commit()
     except:
         pass

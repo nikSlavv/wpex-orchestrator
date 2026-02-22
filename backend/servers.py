@@ -30,6 +30,9 @@ class CreateServerRequest(BaseModel):
     name: str
     udp_port: int
     key_ids: List[int]
+    tenant_id: Optional[int] = None
+    region: str = ""
+    description: str = ""
 
 class UpdateKeysRequest(BaseModel):
     key_ids: List[int]
@@ -91,15 +94,24 @@ def _deploy_container(name, udp_port, web_port, keys_list):
         return False, str(e)
 
 
-# --- Endpoints ---
 @router.get("")
 def list_servers(user=Depends(get_current_user)):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, name, port, web_port FROM servers ORDER BY port ASC")
+    
+    query = "SELECT id, name, port, web_port, tenant_id, region, description FROM servers "
+    params = []
+    
+    if user.get("role") in ("engineer", "viewer"):
+        query += "WHERE tenant_id = %s "
+        params.append(user.get("tenant_id"))
+        
+    query += "ORDER BY port ASC"
+    
+    cur.execute(query, params)
     servers = []
     for row in cur.fetchall():
-        sid, name, udp_port, web_port = row
+        sid, name, udp_port, web_port, tenant_id, region, description = row
         cur.execute(
             """SELECT k.id, k.alias, pgp_sym_decrypt(k.key_value, %s)
                FROM access_keys k
@@ -111,6 +123,7 @@ def list_servers(user=Depends(get_current_user)):
         status = _docker_status(f"wpex-{name}")
         servers.append({
             "id": sid, "name": name, "udp_port": udp_port, "web_port": web_port,
+            "tenant_id": tenant_id, "region": region, "description": description,
             "keys": keys_data, "status": status,
         })
     conn.close()
@@ -119,6 +132,13 @@ def list_servers(user=Depends(get_current_user)):
 
 @router.post("")
 def create_server(body: CreateServerRequest, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti per creare server")
+
+    tenant_id = body.tenant_id
+    if user.get("role") == "engineer":
+        tenant_id = user.get("tenant_id")
+        
     conn = get_db()
     cur = conn.cursor()
 
@@ -131,8 +151,9 @@ def create_server(body: CreateServerRequest, user=Depends(get_current_user)):
     
     try:
         cur.execute(
-            "INSERT INTO servers (name, port, web_port) VALUES (%s, %s, %s) RETURNING id;",
-            (name, body.udp_port, web_port),
+            """INSERT INTO servers (name, port, web_port, tenant_id, region, description) 
+               VALUES (%s, %s, %s, %s, %s, %s) RETURNING id;""",
+            (name, body.udp_port, web_port, tenant_id, body.region, body.description),
         )
         server_id = cur.fetchone()[0]
         for kid in body.key_ids:
@@ -157,14 +178,21 @@ def create_server(body: CreateServerRequest, user=Depends(get_current_user)):
 
 @router.delete("/{server_id}")
 def delete_server(server_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name FROM servers WHERE id = %s", (server_id,))
+    cur.execute("SELECT name, tenant_id FROM servers WHERE id = %s", (server_id,))
     row = cur.fetchone()
     if not row:
+        conn.close()
         raise HTTPException(status_code=404, detail="Server non trovato")
-    
-    name = row[0]
+        
+    name, tenant_id = row
+    if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
     client = _get_docker_client()
     if client:
         try:
@@ -180,17 +208,25 @@ def delete_server(server_id: int, user=Depends(get_current_user)):
 
 @router.post("/{server_id}/start")
 def start_server(server_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+        
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name FROM servers WHERE id = %s", (server_id,))
+    cur.execute("SELECT name, tenant_id FROM servers WHERE id = %s", (server_id,))
     row = cur.fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404)
+        
+    name, tenant_id = row
+    if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
+
     client = _get_docker_client()
     if client:
         try:
-            client.containers.get(f"wpex-{row[0]}").start()
+            client.containers.get(f"wpex-{name}").start()
         except:
             pass
     return {"message": "Avviato"}
@@ -198,13 +234,21 @@ def start_server(server_id: int, user=Depends(get_current_user)):
 
 @router.post("/{server_id}/stop")
 def stop_server(server_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+        
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name FROM servers WHERE id = %s", (server_id,))
+    cur.execute("SELECT name, tenant_id FROM servers WHERE id = %s", (server_id,))
     row = cur.fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404)
+        
+    name, tenant_id = row
+    if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
+
     client = _get_docker_client()
     if client:
         try:
@@ -216,15 +260,22 @@ def stop_server(server_id: int, user=Depends(get_current_user)):
 
 @router.put("/{server_id}/keys")
 def update_keys(server_id: int, body: UpdateKeysRequest, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+        
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name, port, web_port FROM servers WHERE id = %s", (server_id,))
+    cur.execute("SELECT name, port, web_port, tenant_id FROM servers WHERE id = %s", (server_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404)
     
-    name, udp_port, web_port = row
+    name, udp_port, web_port, tenant_id = row
+    
+    if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
 
     cur.execute("DELETE FROM server_keys_link WHERE server_id = %s", (server_id,))
     for kid in body.key_ids:
@@ -247,11 +298,16 @@ def update_keys(server_id: int, body: UpdateKeysRequest, user=Depends(get_curren
 def get_logs(server_id: int, user=Depends(get_current_user)):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT name FROM servers WHERE id = %s", (server_id,))
+    cur.execute("SELECT name, tenant_id FROM servers WHERE id = %s", (server_id,))
     row = cur.fetchone()
     conn.close()
     if not row:
         raise HTTPException(status_code=404)
+        
+    name, tenant_id = row
+    if user.get("role") in ("engineer", "viewer") and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
+
     client = _get_docker_client()
     if not client:
         return {"logs": "Docker non disponibile."}

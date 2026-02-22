@@ -49,6 +49,11 @@ def list_tunnels(
         WHERE 1=1
     """
     params = []
+    
+    if user.get("role") in ("engineer", "viewer"):
+        query += " AND t.tenant_id = %s"
+        params.append(user.get("tenant_id"))
+        
     if tenant_id:
         query += " AND t.tenant_id = %s"
         params.append(tenant_id)
@@ -79,17 +84,24 @@ def list_tunnels(
 
 @router.post("")
 def create_tunnel(body: CreateTunnelRequest, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti per creare tunnel")
+        
+    target_tenant = body.tenant_id
+    if user.get("role") == "engineer":
+        target_tenant = user.get("tenant_id")
+
     conn = get_db()
     try:
         cur = conn.cursor()
         # Check tenant quota
-        cur.execute("SELECT max_tunnels FROM tenants WHERE id = %s", (body.tenant_id,))
+        cur.execute("SELECT max_tunnels FROM tenants WHERE id = %s", (target_tenant,))
         tenant = cur.fetchone()
         if not tenant:
             conn.close()
             raise HTTPException(status_code=404, detail="Tenant non trovato")
 
-        cur.execute("SELECT COUNT(*) FROM tunnels WHERE tenant_id = %s", (body.tenant_id,))
+        cur.execute("SELECT COUNT(*) FROM tunnels WHERE tenant_id = %s", (target_tenant,))
         current_count = cur.fetchone()[0]
         if current_count >= tenant[0]:
             conn.close()
@@ -99,7 +111,7 @@ def create_tunnel(body: CreateTunnelRequest, user=Depends(get_current_user)):
             INSERT INTO tunnels (tenant_id, site_a_id, site_b_id, relay_id, config_json, status)
             VALUES (%s, %s, %s, %s, %s, 'active')
             RETURNING id;
-        """, (body.tenant_id, body.site_a_id, body.site_b_id, body.relay_id,
+        """, (target_tenant, body.site_a_id, body.site_b_id, body.relay_id,
               json.dumps(body.config_json)))
         tunnel_id = cur.fetchone()[0]
 
@@ -141,6 +153,10 @@ def get_tunnel(tunnel_id: int, user=Depends(get_current_user)):
     if not row:
         conn.close()
         raise HTTPException(status_code=404, detail="Tunnel non trovato")
+        
+    if user.get("role") in ("engineer", "viewer") and row[1] != user.get("tenant_id"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Accesso negato")
 
     conn.close()
     return {
@@ -157,8 +173,22 @@ def get_tunnel(tunnel_id: int, user=Depends(get_current_user)):
 
 @router.delete("/{tunnel_id}")
 def delete_tunnel(tunnel_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+        
     conn = get_db()
     cur = conn.cursor()
+    
+    cur.execute("SELECT tenant_id FROM tunnels WHERE id = %s", (tunnel_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Tunnel non trovato")
+        
+    if user.get("role") == "engineer" and row[0] != user.get("tenant_id"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Accesso negato")
+
     cur.execute("DELETE FROM tunnels WHERE id = %s", (tunnel_id,))
     conn.commit()
     conn.close()
@@ -167,14 +197,21 @@ def delete_tunnel(tunnel_id: int, user=Depends(get_current_user)):
 
 @router.put("/{tunnel_id}/config")
 def update_tunnel_config(tunnel_id: int, body: UpdateTunnelConfigRequest, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+
     conn = get_db()
     cur = conn.cursor()
     # Get current version
-    cur.execute("SELECT config_version, relay_id, config_json FROM tunnels WHERE id = %s", (tunnel_id,))
+    cur.execute("SELECT config_version, relay_id, config_json, tenant_id FROM tunnels WHERE id = %s", (tunnel_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404)
+        
+    if user.get("role") == "engineer" and row[3] != user.get("tenant_id"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Accesso negato")
 
     new_version = row[0] + 1
     relay_id = row[1]
@@ -204,11 +241,15 @@ def update_tunnel_config(tunnel_id: int, body: UpdateTunnelConfigRequest, user=D
 def get_config_history(tunnel_id: int, user=Depends(get_current_user)):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT relay_id FROM tunnels WHERE id = %s", (tunnel_id,))
+    cur.execute("SELECT relay_id, tenant_id FROM tunnels WHERE id = %s", (tunnel_id,))
     row = cur.fetchone()
     if not row:
         conn.close()
         raise HTTPException(status_code=404)
+        
+    if user.get("role") in ("engineer", "viewer") and row[1] != user.get("tenant_id"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Accesso negato")
 
     cur.execute("""
         SELECT v.id, v.version, v.config_json, v.diff_from_previous, v.created_at,
@@ -230,13 +271,20 @@ def get_config_history(tunnel_id: int, user=Depends(get_current_user)):
 
 @router.post("/{tunnel_id}/config/rollback/{version}")
 def rollback_config(tunnel_id: int, version: int, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT relay_id FROM tunnels WHERE id = %s", (tunnel_id,))
+    cur.execute("SELECT relay_id, tenant_id FROM tunnels WHERE id = %s", (tunnel_id,))
     trow = cur.fetchone()
     if not trow:
         conn.close()
         raise HTTPException(status_code=404)
+        
+    if user.get("role") == "engineer" and trow[1] != user.get("tenant_id"):
+        conn.close()
+        raise HTTPException(status_code=403, detail="Accesso negato")
 
     cur.execute("""
         SELECT config_json FROM relay_config_versions

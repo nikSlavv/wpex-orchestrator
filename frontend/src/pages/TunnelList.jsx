@@ -2,8 +2,11 @@ import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import { Link2, Plus, Trash2, RefreshCw, Filter, Settings, ArrowRight } from 'lucide-react';
+import { useAuth } from '../AuthContext';
 
 export default function TunnelList() {
+    const { user } = useAuth();
+    const canMutate = !['viewer', 'executive'].includes(user?.role);
     const [tunnels, setTunnels] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
@@ -77,14 +80,16 @@ export default function TunnelList() {
                             <option value="pending">Pending</option>
                             <option value="down">Down</option>
                         </select>
-                        <button className="btn btn-primary" onClick={() => { setShowCreate(!showCreate); if (!showCreate) loadFormData(); }}>
-                            <Plus size={16} /> Nuovo Tunnel
-                        </button>
+                        {canMutate && (
+                            <button className="btn btn-primary" onClick={() => { setShowCreate(!showCreate); if (!showCreate) loadFormData(); }}>
+                                <Plus size={16} /> Nuovo Tunnel
+                            </button>
+                        )}
                         <button className="btn btn-sm" onClick={loadData}><RefreshCw size={14} /></button>
                     </div>
                 </div>
 
-                {showCreate && (
+                {showCreate && canMutate && (
                     <div className="card" style={{ marginBottom: 20 }}>
                         <h3 className="card-title"><Plus size={18} /> Crea Tunnel</h3>
                         <div className="form-row" style={{ marginTop: 12 }}>
@@ -162,9 +167,11 @@ export default function TunnelList() {
                                         <td>v{t.config_version}</td>
                                         <td>
                                             <div style={{ display: 'flex', gap: 4 }}>
-                                                <button className="btn btn-sm btn-danger" onClick={() => handleDelete(t.id)}>
-                                                    <Trash2 size={12} />
-                                                </button>
+                                                {canMutate && (
+                                                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(t.id)}>
+                                                        <Trash2 size={12} />
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
                                     </tr>

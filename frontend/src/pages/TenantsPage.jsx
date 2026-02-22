@@ -5,8 +5,12 @@ import {
     Users, Plus, Trash2, RefreshCw, Settings, ChevronDown, ChevronRight,
     MapPin, Link2, AlertTriangle
 } from 'lucide-react';
+import { useAuth } from '../AuthContext';
 
 export default function TenantsPage() {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
+    const canManageSites = !['viewer', 'executive'].includes(user?.role);
     const [tenants, setTenants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [showCreate, setShowCreate] = useState(false);
@@ -70,14 +74,16 @@ export default function TenantsPage() {
                 <div className="page-header">
                     <h1 className="page-title"><Users size={26} /> Tenant Management</h1>
                     <div style={{ display: 'flex', gap: 8 }}>
-                        <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
-                            <Plus size={16} /> Nuovo Tenant
-                        </button>
+                        {isAdmin && (
+                            <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
+                                <Plus size={16} /> Nuovo Tenant
+                            </button>
+                        )}
                         <button className="btn btn-sm" onClick={loadData}><RefreshCw size={14} /></button>
                     </div>
                 </div>
 
-                {showCreate && (
+                {showCreate && isAdmin && (
                     <div className="card" style={{ marginBottom: 20 }}>
                         <h3 className="card-title"><Plus size={18} /> Crea Tenant</h3>
                         <div className="form-row" style={{ marginTop: 12 }}>
@@ -132,9 +138,11 @@ export default function TenantsPage() {
                                         <div style={{ fontSize: '0.82rem' }}>
                                             <MapPin size={12} style={{ marginRight: 4 }} /> {t.site_count} siti
                                         </div>
-                                        <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}>
-                                            <Trash2 size={12} />
-                                        </button>
+                                        {isAdmin && (
+                                            <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}>
+                                                <Trash2 size={12} />
+                                            </button>
+                                        )}
                                     </div>
                                 </div>
 
@@ -173,12 +181,14 @@ export default function TenantsPage() {
                                         {/* Sites */}
                                         <div className="section-header">
                                             <h4 className="section-title"><MapPin size={16} /> Siti</h4>
-                                            <button className="btn btn-sm" onClick={() => setShowSiteCreate(showSiteCreate === t.id ? null : t.id)}>
-                                                <Plus size={14} /> Aggiungi Site
-                                            </button>
+                                            {canManageSites && (
+                                                <button className="btn btn-sm" onClick={() => setShowSiteCreate(showSiteCreate === t.id ? null : t.id)}>
+                                                    <Plus size={14} /> Aggiungi Site
+                                                </button>
+                                            )}
                                         </div>
 
-                                        {showSiteCreate === t.id && (
+                                        {showSiteCreate === t.id && canManageSites && (
                                             <div className="card" style={{ marginBottom: 12 }}>
                                                 <div className="form-row">
                                                     <div className="form-group">
@@ -215,9 +225,11 @@ export default function TenantsPage() {
                                                             <td><code>{s.public_ip || '—'}</code></td>
                                                             <td><code>{s.subnet || '—'}</code></td>
                                                             <td>
-                                                                <button className="btn btn-sm btn-danger" onClick={() => handleDeleteSite(t.id, s.id)}>
-                                                                    <Trash2 size={12} />
-                                                                </button>
+                                                                {canManageSites && (
+                                                                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteSite(t.id, s.id)}>
+                                                                        <Trash2 size={12} />
+                                                                    </button>
+                                                                )}
                                                             </td>
                                                         </tr>
                                                     ))}

@@ -11,6 +11,7 @@ export default function ServerView() {
     const { name } = useParams();
     const navigate = useNavigate();
     const { user, logout } = useAuth();
+    const canMutate = !['viewer', 'executive'].includes(user?.role);
     const [server, setServer] = useState(null);
     const [allKeys, setAllKeys] = useState([]);
     const [logs, setLogs] = useState('');
@@ -98,17 +99,26 @@ export default function ServerView() {
                     </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    <button className="btn btn-sm btn-full" onClick={() => handleAction('start')} disabled={server.status === 'running'}>
-                        <Play size={14} /> Start
-                    </button>
-                    <button className="btn btn-sm btn-full" onClick={() => handleAction('stop')} disabled={server.status !== 'running'}>
-                        <Square size={14} /> Stop
-                    </button>
-                    <button className="btn btn-sm btn-full" onClick={refresh}>
-                        <RefreshCw size={14} /> Refresh
-                    </button>
-                </div>
+                {canMutate && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <button className="btn btn-sm btn-full" onClick={() => handleAction('start')} disabled={server.status === 'running'}>
+                            <Play size={14} /> Start
+                        </button>
+                        <button className="btn btn-sm btn-full" onClick={() => handleAction('stop')} disabled={server.status !== 'running'}>
+                            <Square size={14} /> Stop
+                        </button>
+                        <button className="btn btn-sm btn-full" onClick={refresh}>
+                            <RefreshCw size={14} /> Refresh
+                        </button>
+                    </div>
+                )}
+                {!canMutate && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                        <button className="btn btn-sm btn-full" onClick={refresh}>
+                            <RefreshCw size={14} /> Refresh
+                        </button>
+                    </div>
+                )}
 
                 <div className="sidebar-user">
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -146,20 +156,21 @@ export default function ServerView() {
                     <div className="card">
                         <div className="collapsible-header" onClick={() => setShowKeys(!showKeys)}>
                             <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                <Key size={16} /> Gestisci Chiavi ({server.keys.length})
+                                <Key size={16} /> Chiavi Autorizzate ({server.keys.length})
                             </span>
                             {showKeys ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
                         </div>
                         <div className={`collapsible-content ${showKeys ? 'open' : ''}`}>
                             <div className="checkbox-list">
                                 {allKeys.map(k => (
-                                    <label key={k.id} className="checkbox-item">
+                                    <label key={k.id} className="checkbox-item" style={{ opacity: canMutate ? 1 : 0.7 }}>
                                         <input
                                             type="checkbox"
                                             checked={server.keys.some(sk => sk.id === k.id)}
                                             onChange={e => handleUpdateKeys(k.id, e.target.checked)}
+                                            disabled={!canMutate}
                                         />
-                                        {k.alias}
+                                        {k.alias} {server.keys.some(sk => sk.id === k.id) && !canMutate && '(Attiva)'}
                                     </label>
                                 ))}
                             </div>

@@ -6,8 +6,11 @@ import {
     Server, RefreshCw, Play, Square, Trash2, Plus, Activity,
     Wifi, ArrowUpRight, ChevronRight, Search, Key
 } from 'lucide-react';
+import { useAuth } from '../AuthContext';
 
 export default function NetworkView() {
+    const { user } = useAuth();
+    const canMutate = !['viewer', 'executive'].includes(user?.role);
     const [servers, setServers] = useState([]);
     const [kpi, setKpi] = useState(null);
     const [search, setSearch] = useState('');
@@ -17,17 +20,21 @@ export default function NetworkView() {
     const [newPort, setNewPort] = useState('');
     const [availableKeys, setAvailableKeys] = useState([]);
     const [selectedKeyIds, setSelectedKeyIds] = useState([]);
+    const [tenants, setTenants] = useState([]);
+    const [selectedTenant, setSelectedTenant] = useState('');
 
     const loadData = async () => {
         try {
-            const [s, k, keys] = await Promise.all([
+            const [s, k, keys, tList] = await Promise.all([
                 api.getServers(),
                 api.getDashboardKPI(),
-                api.getKeys().catch(() => ({ keys: [] }))
+                api.getKeys().catch(() => ({ keys: [] })),
+                user?.role === 'admin' ? api.getTenants() : Promise.resolve([])
             ]);
             setServers(s.servers || []);
             setKpi(k);
             setAvailableKeys(keys.keys || keys || []);
+            if (user?.role === 'admin') setTenants(tList.tenants || tList || []);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
@@ -46,12 +53,14 @@ export default function NetworkView() {
 
     const handleCreate = async () => {
         if (!newName.trim()) return;
+        const tenantIdToSend = user?.role === 'admin' ? selectedTenant || null : user?.tenant_id;
         try {
-            await api.createServer(newName, parseInt(newPort) || 0, selectedKeyIds);
+            await api.createServer(newName, parseInt(newPort) || 0, selectedKeyIds, tenantIdToSend);
             setShowCreate(false);
             setNewName('');
             setNewPort('');
             setSelectedKeyIds([]);
+            setSelectedTenant('');
             loadData();
         } catch (e) { alert(e.message); }
     };
@@ -80,9 +89,11 @@ export default function NetworkView() {
                                 onChange={e => setSearch(e.target.value)}
                                 style={{ paddingLeft: 36, width: 220 }} />
                         </div>
-                        <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
-                            <Plus size={16} /> Nuovo Relay
-                        </button>
+                        {canMutate && (
+                            <button className="btn btn-primary" onClick={() => setShowCreate(!showCreate)}>
+                                <Plus size={16} /> Nuovo Relay
+                            </button>
+                        )}
                         <button className="btn btn-sm" onClick={loadData}>
                             <RefreshCw size={14} />
                         </button>
@@ -90,7 +101,7 @@ export default function NetworkView() {
                 </div>
 
                 {/* Create Form */}
-                {showCreate && (
+                {showCreate && canMutate && (
                     <div className="card" style={{ marginBottom: 20, animation: 'fadeInUp 0.3s ease-out' }}>
                         <h3 className="card-title"><Plus size={18} /> Crea Nuovo Relay</h3>
                         <div className="form-row" style={{ marginTop: 12 }}>
@@ -133,8 +144,19 @@ export default function NetworkView() {
                                 </div>
                             )}
                         </div>
+                        {user?.role === 'admin' && (
+                            <div className="form-group" style={{ marginTop: 16 }}>
+                                <label>Tenant Proprietario (Opzionale)</label>
+                                <select className="input" value={selectedTenant} onChange={e => setSelectedTenant(e.target.value)}>
+                                    <option value="">Nessuno (Globale)</option>
+                                    {tenants.map(t => (
+                                        <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                         <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                            <button className="btn btn-secondary" onClick={() => { setShowCreate(false); setSelectedKeyIds([]); }}>Annulla</button>
+                            <button className="btn btn-secondary" onClick={() => { setShowCreate(false); setSelectedKeyIds([]); setSelectedTenant(''); }}>Annulla</button>
                             <button className="btn btn-primary" onClick={handleCreate}>
                                 <Plus size={14} /> Crea Relay
                             </button>
@@ -189,12 +211,12 @@ export default function NetworkView() {
                                             <td>{relayKpi ? relayKpi.peers_count : '—'}</td>
                                             <td>
                                                 <div style={{ display: 'flex', gap: 4 }}>
-                                                    {s.status !== 'running' && (
+                                                    {canMutate && s.status !== 'running' && (
                                                         <button className="btn btn-sm" onClick={() => handleStart(s.id)} title="Avvia">
                                                             <Play size={12} />
                                                         </button>
                                                     )}
-                                                    {s.status === 'running' && (
+                                                    {canMutate && s.status === 'running' && (
                                                         <button className="btn btn-sm" onClick={() => handleStop(s.id)} title="Ferma">
                                                             <Square size={12} />
                                                         </button>
@@ -202,9 +224,11 @@ export default function NetworkView() {
                                                     <Link to={`/relays/${s.id}`} className="btn btn-sm" title="Dettagli">
                                                         <ChevronRight size={12} />
                                                     </Link>
-                                                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s.id)} title="Elimina">
-                                                        <Trash2 size={12} />
-                                                    </button>
+                                                    {canMutate && (
+                                                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s.id)} title="Elimina">
+                                                            <Trash2 size={12} />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </td>
                                         </tr>

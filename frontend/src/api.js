@@ -56,8 +56,8 @@ export const api = {
     getServers: () =>
         request('/api/servers'),
 
-    createServer: (name, udp_port, key_ids) =>
-        request('/api/servers', { method: 'POST', body: JSON.stringify({ name, udp_port, key_ids }) }),
+    createServer: (name, udp_port, key_ids, tenant_id) =>
+        request('/api/servers', { method: 'POST', body: JSON.stringify({ name, udp_port, key_ids, tenant_id }) }),
 
     deleteServer: (id) =>
         request(`/api/servers/${id}`, { method: 'DELETE' }),
@@ -78,8 +78,8 @@ export const api = {
     getKeys: () =>
         request('/api/keys'),
 
-    createKey: (alias, key) =>
-        request('/api/keys', { method: 'POST', body: JSON.stringify({ alias, key }) }),
+    createKey: (alias, key, tenant_id) =>
+        request('/api/keys', { method: 'POST', body: JSON.stringify({ alias, key, tenant_id }) }),
 
     deleteKey: (id) =>
         request(`/api/keys/${id}`, { method: 'DELETE' }),

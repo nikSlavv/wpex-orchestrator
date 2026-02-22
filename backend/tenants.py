@@ -44,15 +44,26 @@ class CreateSiteRequest(BaseModel):
 def list_tenants(user=Depends(get_current_user)):
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("""
+    
+    is_tenant_scoped = user.get("role") in ("engineer", "viewer")
+    tenant_id = user.get("tenant_id")
+    
+    query = """
         SELECT t.id, t.name, t.slug, t.max_tunnels, t.max_bandwidth_mbps,
                t.sla_target, t.allowed_regions, t.preferred_relay_ids,
                t.api_key, t.is_active, t.created_at,
                (SELECT COUNT(*) FROM tunnels WHERE tenant_id = t.id) as tunnel_count,
                (SELECT COUNT(*) FROM sites WHERE tenant_id = t.id) as site_count
         FROM tenants t
-        ORDER BY t.name ASC
-    """)
+    """
+    params = []
+    if is_tenant_scoped:
+        query += " WHERE t.id = %s"
+        params.append(tenant_id)
+        
+    query += " ORDER BY t.name ASC"
+    
+    cur.execute(query, params)
     tenants = []
     for row in cur.fetchall():
         tenants.append({
@@ -71,6 +82,9 @@ def list_tenants(user=Depends(get_current_user)):
 
 @router.post("")
 def create_tenant(body: CreateTenantRequest, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo gli admin possono creare tenant")
+        
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -94,6 +108,9 @@ def create_tenant(body: CreateTenantRequest, user=Depends(get_current_user)):
 
 @router.get("/{tenant_id}")
 def get_tenant(tenant_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("engineer", "viewer") and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Accesso negato")
+
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
@@ -147,6 +164,9 @@ def get_tenant(tenant_id: int, user=Depends(get_current_user)):
 
 @router.put("/{tenant_id}")
 def update_tenant(tenant_id: int, body: UpdateTenantRequest, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo gli admin possono modificare i tenant")
+
     conn = get_db()
     cur = conn.cursor()
     updates = []
@@ -187,6 +207,9 @@ def update_tenant(tenant_id: int, body: UpdateTenantRequest, user=Depends(get_cu
 
 @router.delete("/{tenant_id}")
 def delete_tenant(tenant_id: int, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo gli admin possono eliminare i tenant")
+
     conn = get_db()
     cur = conn.cursor()
     cur.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
@@ -198,6 +221,9 @@ def delete_tenant(tenant_id: int, user=Depends(get_current_user)):
 # --- Site Endpoints ---
 @router.get("/{tenant_id}/sites")
 def list_sites(tenant_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("engineer", "viewer") and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Accesso negato")
+
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
@@ -215,6 +241,11 @@ def list_sites(tenant_id: int, user=Depends(get_current_user)):
 
 @router.post("/{tenant_id}/sites")
 def create_site(tenant_id: int, body: CreateSiteRequest, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti per creare site")
+    if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Accesso negato")
+
     conn = get_db()
     try:
         cur = conn.cursor()
@@ -232,6 +263,11 @@ def create_site(tenant_id: int, body: CreateSiteRequest, user=Depends(get_curren
 
 @router.delete("/{tenant_id}/sites/{site_id}")
 def delete_site(tenant_id: int, site_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("viewer", "executive"):
+        raise HTTPException(status_code=403, detail="Permessi insufficienti per eliminare site")
+    if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Accesso negato")
+
     conn = get_db()
     cur = conn.cursor()
     cur.execute("DELETE FROM sites WHERE id = %s AND tenant_id = %s", (site_id, tenant_id))
@@ -242,6 +278,9 @@ def delete_site(tenant_id: int, site_id: int, user=Depends(get_current_user)):
 
 @router.get("/{tenant_id}/usage")
 def get_tenant_usage(tenant_id: int, user=Depends(get_current_user)):
+    if user.get("role") in ("engineer", "viewer") and tenant_id != user.get("tenant_id"):
+        raise HTTPException(status_code=403, detail="Accesso negato")
+
     conn = get_db()
     cur = conn.cursor()
     cur.execute("SELECT max_tunnels, max_bandwidth_mbps FROM tenants WHERE id = %s", (tenant_id,))
