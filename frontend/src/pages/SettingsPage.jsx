@@ -160,10 +160,12 @@ export default function SettingsPage() {
                                         Accesso completo in lettura e scrittura a tutto il sistema, organizzazioni interne e configurazioni (Globale).
                                     </div>
                                 )}
-                                <div style={{ background: 'rgba(124, 106, 239, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #9b8afb' }}>
-                                    <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Executive</strong>
-                                    Sola lettura per metriche e dashboard di tutte le organizzazioni. Nessun permesso di modifica (Globale).
-                                </div>
+                                {user?.role === 'admin' && (
+                                    <div style={{ background: 'rgba(124, 106, 239, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #9b8afb' }}>
+                                        <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Executive</strong>
+                                        Sola lettura per metriche e dashboard di tutte le organizzazioni. Nessun permesso di modifica (Globale).
+                                    </div>
+                                )}
                                 <div style={{ background: 'rgba(52, 211, 153, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #34d399' }}>
                                     <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Engineer</strong>
                                     Gestione completa per la propria organizzazione. Può approvare utenti del proprio tenant (Limitato all'Org).
