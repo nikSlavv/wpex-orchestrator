@@ -40,8 +40,11 @@ export const api = {
     login: (username, password) =>
         request('/api/auth/login', { method: 'POST', body: JSON.stringify({ username, password }) }),
 
-    register: (username, password) =>
-        request('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, password }) }),
+    register: (username, password, tenant_id) =>
+        request('/api/auth/register', { method: 'POST', body: JSON.stringify({ username, password, tenant_id }) }),
+
+    getPublicTenants: () =>
+        request('/api/auth/public/tenants'),
 
     logout: () =>
         request('/api/auth/logout', { method: 'POST' }),
@@ -176,4 +179,7 @@ export const api = {
 
     updateUserTenant: (userId, tenant_id) =>
         request(`/api/auth/users/${userId}/tenant`, { method: 'PUT', body: JSON.stringify({ tenant_id }) }),
+
+    updateUserStatus: (userId, status) =>
+        request(`/api/auth/users/${userId}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
 };

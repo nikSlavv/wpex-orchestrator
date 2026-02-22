@@ -28,6 +28,7 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str
     password: str
+    tenant_id: int
 
 
 # --- JWT Helpers ---
@@ -55,8 +56,8 @@ def verify_jwt_token(token: str):
         return None
 
 
-def get_current_user(request: Request):
-    """FastAPI dependency: extract and validate JWT from Authorization header or cookie."""
+def get_current_user_any_status(request: Request):
+    """Dependency that extracts user and role/tenant but DOES NOT block pending users."""
     token = None
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
@@ -70,24 +71,36 @@ def get_current_user(request: Request):
     if not payload:
         raise HTTPException(status_code=401, detail="Token non valido o scaduto")
 
-    # Fetch role and tenant from DB
     user_id = int(payload["sub"])
     role = "engineer"
     tenant_id = None
+    status = "active"
     try:
         conn = get_db()
         cur = conn.cursor()
-        cur.execute("SELECT role, tenant_id FROM users WHERE id = %s", (user_id,))
+        cur.execute("SELECT role, tenant_id, status FROM users WHERE id = %s", (user_id,))
         row = cur.fetchone()
         if row:
             role = row[0] or "engineer"
             tenant_id = row[1]
+            status = row[2] or "active"
         conn.close()
     except:
         pass
 
     return {"id": user_id, "username": payload["name"], "token": token,
-            "role": role, "tenant_id": tenant_id}
+            "role": role, "tenant_id": tenant_id, "status": status}
+
+
+def get_current_user(user=Depends(get_current_user_any_status)):
+    """FastAPI dependency: same as above but BLOCKS users that are not 'active'."""
+    if user["status"] != "active":
+        raise HTTPException(
+            status_code=403, 
+            detail="Account non attivo o in attesa di approvazione",
+            headers={"X-User-Status": user["status"]}
+        )
+    return user
 
 
 # --- Endpoints ---
@@ -96,7 +109,7 @@ def login(body: LoginRequest, response: Response):
     conn = get_db()
     cur = conn.cursor()
     cur.execute(
-        "SELECT id, username FROM users WHERE username = %s AND password_hash = crypt(%s, password_hash);",
+        "SELECT id, username, status FROM users WHERE username = %s AND password_hash = crypt(%s, password_hash);",
         (body.username, body.password),
     )
     user = cur.fetchone()
@@ -111,7 +124,7 @@ def login(body: LoginRequest, response: Response):
         httponly=True, samesite="lax",
         expires=exp.strftime("%a, %d %b %Y %H:%M:%S GMT"),
     )
-    return {"token": token, "username": user[1], "expires": exp.isoformat()}
+    return {"token": token, "username": user[1], "expires": exp.isoformat(), "status": user[2] or "active"}
 
 
 @router.post("/register")
@@ -119,13 +132,19 @@ def register(body: RegisterRequest):
     conn = get_db()
     try:
         cur = conn.cursor()
+        # Verify tenant exists
+        cur.execute("SELECT id FROM tenants WHERE id = %s AND is_active = TRUE", (body.tenant_id,))
+        if not cur.fetchone():
+            raise HTTPException(status_code=400, detail="Organizzazione non valida o inattiva")
+        
+        # Insert user as pending with viewer role
         cur.execute(
-            "INSERT INTO users (username, password_hash) VALUES (%s, crypt(%s, gen_salt('bf')));",
-            (body.username, body.password),
+            "INSERT INTO users (username, password_hash, status, role, tenant_id) VALUES (%s, crypt(%s, gen_salt('bf')), 'pending', 'viewer', %s);",
+            (body.username, body.password, body.tenant_id),
         )
         conn.commit()
         conn.close()
-        return {"message": "Utente creato con successo"}
+        return {"message": "Registrazione completata. Il tuo account è in attesa di approvazione da parte della tua organizzazione."}
     except psycopg2.errors.UniqueViolation:
         raise HTTPException(status_code=409, detail="Username già esistente")
     except Exception as e:
@@ -154,30 +173,36 @@ def logout(response: Response, user=Depends(get_current_user)):
 
 
 @router.get("/me")
-def me(user=Depends(get_current_user)):
+def me(user=Depends(get_current_user_any_status)):
     return {"id": user["id"], "username": user["username"],
-            "role": user.get("role", "engineer"), "tenant_id": user.get("tenant_id")}
+            "role": user.get("role", "engineer"), "tenant_id": user.get("tenant_id"),
+            "status": user.get("status", "active")}
 
 
 @router.get("/users")
 def list_users(user=Depends(get_current_user)):
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Solo gli admin possono visualizzare gli utenti")
+    # Admin sees all. Engineer sees only their tenant's users.
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, username, role, tenant_id, created_at FROM users ORDER BY id")
+    if user.get("role") == "admin":
+        cur.execute("SELECT id, username, role, tenant_id, created_at, status FROM users ORDER BY id")
+    elif user.get("role") == "engineer":
+        cur.execute("SELECT id, username, role, tenant_id, created_at, status FROM users WHERE tenant_id = %s ORDER BY id", (user["tenant_id"],))
+    else:
+        conn.close()
+        raise HTTPException(status_code=403, detail="Solo gli admin e gli engineer possono visualizzare gli utenti")
+    
     rows = cur.fetchall()
     conn.close()
     return {"users": [{"id": r[0], "username": r[1], "role": r[2] or "engineer",
-                        "tenant_id": r[3], "created_at": str(r[4]) if r[4] else None} for r in rows]}
+                        "tenant_id": r[3], "created_at": str(r[4]) if r[4] else None,
+                        "status": r[5] or "active"} for r in rows]}
 
 
 @router.put("/users/{user_id}/role")
 def update_user_role(user_id: int, body: dict, user=Depends(get_current_user)):
-    if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Solo gli admin possono modificare i ruoli")
     role = body.get("role")
-    if role not in ("admin", "executive", "engineer"):
+    if role not in ("admin", "executive", "engineer", "viewer"):
         raise HTTPException(status_code=400, detail="Ruolo non valido")
     conn = get_db()
     cur = conn.cursor()
@@ -198,4 +223,43 @@ def update_user_tenant(user_id: int, body: dict, user=Depends(get_current_user))
     conn.commit()
     conn.close()
     return {"message": "Tenant aggiornato", "user_id": user_id, "tenant_id": tenant_id}
+
+
+@router.put("/users/{user_id}/status")
+def update_user_status(user_id: int, body: dict, user=Depends(get_current_user)):
+    # RBAC Check: admin can do anything. Engineer can manage users in their tenant.
+    if user.get("role") == "admin":
+        pass
+    elif user.get("role") == "engineer":
+        conn = get_db()
+        cur = conn.cursor()
+        cur.execute("SELECT tenant_id FROM users WHERE id = %s", (user_id,))
+        row = cur.fetchone()
+        conn.close()
+        if not row or row[0] != user["tenant_id"]:
+            raise HTTPException(status_code=403, detail="Puoi gestire solo utenti del tuo tenant")
+    else:
+        raise HTTPException(status_code=403, detail="Permessi insufficienti")
+
+    status = body.get("status")
+    if status not in ("pending", "active", "disabled"):
+        raise HTTPException(status_code=400, detail="Status non valido")
+    
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("UPDATE users SET status = %s WHERE id = %s", (status, user_id))
+    conn.commit()
+    conn.close()
+    return {"message": "Status aggiornato", "user_id": user_id, "status": status}
+
+
+@router.get("/public/tenants")
+def list_public_tenants():
+    """Publicly accessible list of tenants for registration."""
+    conn = get_db()
+    cur = conn.cursor()
+    cur.execute("SELECT id, name FROM tenants WHERE is_active = TRUE ORDER BY name")
+    rows = cur.fetchall()
+    conn.close()
+    return {"tenants": [{"id": r[0], "name": r[1]} for r in rows]}
 

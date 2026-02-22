@@ -18,7 +18,7 @@ const NAV_ITEMS = [
     { divider: true },
     { to: '/config', icon: Settings, label: 'Config', roles: ['admin'] },
     { to: '/audit', icon: FileText, label: 'Audit Log', roles: ['admin'] },
-    { to: '/settings', icon: Shield, label: 'Settings', roles: ['admin'] },
+    { to: '/settings', icon: Shield, label: 'Settings', roles: ['admin', 'engineer'] },
 ];
 
 export default function Sidebar() {

@@ -58,10 +58,33 @@ export default function SettingsPage() {
         }
     };
 
+    const handleStatusChange = async (userId, newStatus) => {
+        setSaving(userId);
+        setError('');
+        setSuccess('');
+        try {
+            await api.updateUserStatus(userId, newStatus);
+            setUsers(prev => prev.map(u => u.id === userId ? { ...u, status: newStatus } : u));
+            setSuccess(`Stato utente #${userId} aggiornato a ${newStatus}`);
+            setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSaving(null);
+        }
+    };
+
     const roleColors = {
         admin: { bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: 'rgba(239, 68, 68, 0.3)' },
         executive: { bg: 'rgba(124, 106, 239, 0.15)', color: '#9b8afb', border: 'rgba(124, 106, 239, 0.3)' },
         engineer: { bg: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: 'rgba(52, 211, 153, 0.3)' },
+        viewer: { bg: 'rgba(156, 163, 175, 0.15)', color: '#9ca3af', border: 'rgba(156, 163, 175, 0.3)' },
+    };
+
+    const statusColors = {
+        active: { bg: 'rgba(52, 211, 153, 0.15)', color: '#34d399', border: 'rgba(52, 211, 153, 0.3)' },
+        pending: { bg: 'rgba(251, 191, 36, 0.15)', color: '#fbbf24', border: 'rgba(251, 191, 36, 0.3)' },
+        disabled: { bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: 'rgba(239, 68, 68, 0.3)' },
     };
 
     return (
@@ -114,6 +137,7 @@ export default function SettingsPage() {
                                         <th>ID</th>
                                         <th>Username</th>
                                         <th>Ruolo</th>
+                                        <th>Stato</th>
                                         <th>Tenant</th>
                                         <th>Creato il</th>
                                         <th>Azioni</th>
@@ -138,6 +162,20 @@ export default function SettingsPage() {
                                                     {u.role || 'engineer'}
                                                 </span>
                                             </td>
+                                            <td>
+                                                <span style={{
+                                                    display: 'inline-block',
+                                                    padding: '3px 10px',
+                                                    borderRadius: 20,
+                                                    fontSize: '0.8rem',
+                                                    fontWeight: 600,
+                                                    background: (statusColors[u.status] || statusColors.pending).bg,
+                                                    color: (statusColors[u.status] || statusColors.pending).color,
+                                                    border: `1px solid ${(statusColors[u.status] || statusColors.pending).border}`,
+                                                }}>
+                                                    {u.status || 'pending'}
+                                                </span>
+                                            </td>
                                             <td>{u.tenant_id ? `Tenant #${u.tenant_id}` : '—'}</td>
                                             <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                                                 {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
@@ -155,7 +193,27 @@ export default function SettingsPage() {
                                                             <option value="admin">Admin</option>
                                                             <option value="executive">Executive</option>
                                                             <option value="engineer">Engineer</option>
+                                                            <option value="viewer">Viewer</option>
                                                         </select>
+                                                        {u.status === 'pending' ? (
+                                                            <button
+                                                                className="btn btn-sm btn-success"
+                                                                onClick={() => handleStatusChange(u.id, 'active')}
+                                                                disabled={saving === u.id}
+                                                                style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                                                            >
+                                                                Approva
+                                                            </button>
+                                                        ) : (
+                                                            <button
+                                                                className={`btn btn-sm ${u.status === 'disabled' ? 'btn-secondary' : 'btn-danger'}`}
+                                                                onClick={() => handleStatusChange(u.id, u.status === 'disabled' ? 'active' : 'disabled')}
+                                                                disabled={saving === u.id}
+                                                                style={{ padding: '4px 8px', fontSize: '0.75rem', width: 80 }}
+                                                            >
+                                                                {u.status === 'disabled' ? 'Attiva' : 'Disabilita'}
+                                                            </button>
+                                                        )}
                                                         <input
                                                             className="input"
                                                             type="number"

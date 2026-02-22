@@ -22,13 +22,18 @@ export function AuthProvider({ children }) {
     const login = async (username, password) => {
         const data = await api.login(username, password);
         setToken(data.token);
-        const me = await api.me();
-        setUser(me);
+        // If pending or disabled, don't fetch /me (middleware would block anyway)
+        if (data.status && data.status !== 'active') {
+            setUser({ id: null, username, status: data.status, role: 'viewer', tenant_id: null });
+        } else {
+            const me = await api.me();
+            setUser(me);
+        }
         return data;
     };
 
-    const register = async (username, password) => {
-        return await api.register(username, password);
+    const register = async (username, password, tenant_id) => {
+        return await api.register(username, password, tenant_id);
     };
 
     const logout = async () => {

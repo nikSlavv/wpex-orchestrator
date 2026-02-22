@@ -72,6 +72,7 @@ def init_db():
             id SERIAL PRIMARY KEY,
             username VARCHAR(50) UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
+            status VARCHAR(20) DEFAULT 'pending',
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );
     """)
@@ -174,6 +175,8 @@ def migrate_db():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tenant_id INT;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_secret VARCHAR(100);")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ip_whitelist TEXT[];")
+        # Onboarding: status field (pending/active/disabled)
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';")
         # Relay tenant association
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS tenant_id INT;")
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS region VARCHAR(50);")

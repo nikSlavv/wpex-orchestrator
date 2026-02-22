@@ -12,11 +12,14 @@ import KeysPage from './pages/KeysPage';
 import ConfigManager from './pages/ConfigManager';
 import AuditLog from './pages/AuditLog';
 import SettingsPage from './pages/SettingsPage';
+import PendingApprovalPage from './pages/PendingApprovalPage';
 
 function ProtectedRoute({ children }) {
     const { user, loading } = useAuth();
     if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
-    return user ? children : <Navigate to="/login" />;
+    if (!user) return <Navigate to="/login" />;
+    if (user.status && user.status !== 'active') return <Navigate to="/pending" />;
+    return children;
 }
 
 export default function App() {
@@ -28,6 +31,7 @@ export default function App() {
         <Routes>
             <Route path="/" element={user ? <Navigate to="/dashboard" /> : <LandingPage />} />
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <LoginPage />} />
+            <Route path="/pending" element={user && user.status !== 'active' ? <PendingApprovalPage /> : <Navigate to="/dashboard" />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/network" element={<ProtectedRoute><NetworkView /></ProtectedRoute>} />
             <Route path="/relays" element={<ProtectedRoute><NetworkView /></ProtectedRoute>} />
