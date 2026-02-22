@@ -7,21 +7,26 @@ import { Settings, Users, Shield, Server, Save, RefreshCw, AlertTriangle } from 
 export default function SettingsPage() {
     const { user } = useAuth();
     const [users, setUsers] = useState([]);
+    const [tenants, setTenants] = useState([]);
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(null);
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [tab, setTab] = useState('rbac');
 
-    useEffect(() => { loadUsers(); }, []);
+    useEffect(() => { loadData(); }, []);
 
-    const loadUsers = async () => {
+    const loadData = async () => {
         setLoading(true);
         try {
-            const data = await api.getUsers();
-            setUsers(data.users || data || []);
+            const [usersData, tenantsData] = await Promise.all([
+                api.getUsers(),
+                api.getPublicTenants()
+            ]);
+            setUsers(usersData.users || usersData || []);
+            setTenants(tenantsData.tenants || []);
         } catch (err) {
-            setError('Impossibile caricare gli utenti');
+            setError('Impossibile caricare i dati');
         } finally {
             setLoading(false);
         }
@@ -96,7 +101,7 @@ export default function SettingsPage() {
                         <h1><Settings size={28} /> Settings</h1>
                         <p className="subtitle">Gestione RBAC, sicurezza e configurazione di sistema</p>
                     </div>
-                    <button className="btn btn-secondary" onClick={loadUsers}>
+                    <button className="btn btn-secondary" onClick={loadData}>
                         <RefreshCw size={16} /> Ricarica
                     </button>
                 </div>
@@ -123,9 +128,34 @@ export default function SettingsPage() {
                         </h2>
                         {user?.role !== 'admin' && (
                             <div className="alert alert-danger" style={{ marginBottom: 16 }}>
-                                <AlertTriangle size={16} /> Solo gli amministratori possono modificare i ruoli
+                                <AlertTriangle size={16} /> Solo gli amministratori possono modificare i ruoli globali.
                             </div>
                         )}
+
+                        <div className="card" style={{ background: 'rgba(255,255,255,0.02)', padding: '16px 20px', marginBottom: 20 }}>
+                            <h3 style={{ fontSize: '0.95rem', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Shield size={16} color="var(--accent-purple-light)" /> Gerarchia dei Ruoli
+                            </h3>
+                            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 12, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                                <div style={{ background: 'rgba(239, 68, 68, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #f87171' }}>
+                                    <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Admin</strong>
+                                    Accesso completo in lettura e scrittura a tutto il sistema, organizzazioni interne e configurazioni (Globale).
+                                </div>
+                                <div style={{ background: 'rgba(124, 106, 239, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #9b8afb' }}>
+                                    <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Executive</strong>
+                                    Sola lettura per metriche e dashboard di tutte le organizzazioni. Nessun permesso di modifica (Globale).
+                                </div>
+                                <div style={{ background: 'rgba(52, 211, 153, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #34d399' }}>
+                                    <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Engineer</strong>
+                                    Gestione completa per la propria organizzazione. Può approvare utenti del proprio tenant (Scopato al Tenant).
+                                </div>
+                                <div style={{ background: 'rgba(156, 163, 175, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #9ca3af' }}>
+                                    <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Viewer</strong>
+                                    Visione limitata alle risorse della propria organizzazione. Nessuna modifica (Scopato al Tenant).
+                                </div>
+                            </div>
+                        </div>
+
                         {loading ? (
                             <div style={{ textAlign: 'center', padding: 40 }}>
                                 <div className="spinner" />
@@ -176,7 +206,12 @@ export default function SettingsPage() {
                                                     {u.status || 'pending'}
                                                 </span>
                                             </td>
-                                            <td>{u.tenant_id ? `Tenant #${u.tenant_id}` : '—'}</td>
+                                            <td>
+                                                {u.tenant_id
+                                                    ? tenants.find(t => t.id === u.tenant_id)?.name || `Tenant #${u.tenant_id}`
+                                                    : '—'
+                                                }
+                                            </td>
                                             <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
                                                 {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
                                             </td>
@@ -214,15 +249,18 @@ export default function SettingsPage() {
                                                                 {u.status === 'disabled' ? 'Attiva' : 'Disabilita'}
                                                             </button>
                                                         )}
-                                                        <input
+                                                        <select
                                                             className="input"
-                                                            type="number"
-                                                            placeholder="Tenant ID"
                                                             value={u.tenant_id || ''}
                                                             onChange={e => handleTenantChange(u.id, e.target.value)}
                                                             disabled={saving === u.id}
-                                                            style={{ width: 90, padding: '4px 8px', fontSize: '0.82rem' }}
-                                                        />
+                                                            style={{ width: 140, padding: '4px 8px', fontSize: '0.82rem' }}
+                                                        >
+                                                            <option value="">Nessun Tenant</option>
+                                                            {tenants.map(t => (
+                                                                <option key={t.id} value={t.id}>{t.name}</option>
+                                                            ))}
+                                                        </select>
                                                         {saving === u.id && <div className="spinner" style={{ width: 16, height: 16 }} />}
                                                     </div>
                                                 ) : (
