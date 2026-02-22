@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
 import { api } from '../api';
 import Sidebar from '../components/Sidebar';
-import { Settings, Users, Shield, Server, Save, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Settings, Users, Shield, Server, Save, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user } = useAuth();
@@ -79,6 +79,23 @@ export default function SettingsPage() {
         }
     };
 
+    const handleDeleteUser = async (userId, username) => {
+        if (!window.confirm(`Sei sicuro di voler eliminare definitivamente l'utente ${username}?`)) return;
+        setSaving(userId);
+        setError('');
+        setSuccess('');
+        try {
+            await api.deleteUser(userId);
+            setUsers(prev => prev.filter(u => u.id !== userId));
+            setSuccess(`Utente ${username} eliminato con successo`);
+            setTimeout(() => setSuccess(''), 3000);
+        } catch (err) {
+            setError(err.message);
+        } finally {
+            setSaving(null);
+        }
+    };
+
     const roleColors = {
         admin: { bg: 'rgba(239, 68, 68, 0.15)', color: '#f87171', border: 'rgba(239, 68, 68, 0.3)' },
         executive: { bg: 'rgba(124, 106, 239, 0.15)', color: '#9b8afb', border: 'rgba(124, 106, 239, 0.3)' },
@@ -137,10 +154,12 @@ export default function SettingsPage() {
                                 <Shield size={16} color="var(--accent-purple-light)" /> Gerarchia dei Ruoli
                             </h3>
                             <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 12, fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                                <div style={{ background: 'rgba(239, 68, 68, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #f87171' }}>
-                                    <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Admin</strong>
-                                    Accesso completo in lettura e scrittura a tutto il sistema, organizzazioni interne e configurazioni (Globale).
-                                </div>
+                                {user?.role === 'admin' && (
+                                    <div style={{ background: 'rgba(239, 68, 68, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #f87171' }}>
+                                        <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Admin</strong>
+                                        Accesso completo in lettura e scrittura a tutto il sistema, organizzazioni interne e configurazioni (Globale).
+                                    </div>
+                                )}
                                 <div style={{ background: 'rgba(124, 106, 239, 0.05)', padding: 12, borderRadius: 8, borderLeft: '3px solid #9b8afb' }}>
                                     <strong style={{ color: '#e8e8f0', display: 'block', marginBottom: 4 }}>Executive</strong>
                                     Sola lettura per metriche e dashboard di tutte le organizzazioni. Nessun permesso di modifica (Globale).
@@ -225,7 +244,7 @@ export default function SettingsPage() {
                                                             disabled={saving === u.id}
                                                             style={{ width: 130, padding: '4px 8px', fontSize: '0.82rem' }}
                                                         >
-                                                            <option value="admin">Admin</option>
+                                                            {user?.role === 'admin' && <option value="admin">Admin</option>}
                                                             <option value="executive">Executive</option>
                                                             <option value="engineer">Engineer</option>
                                                             <option value="viewer">Viewer</option>
@@ -261,6 +280,17 @@ export default function SettingsPage() {
                                                                 <option key={t.id} value={t.id}>{t.name}</option>
                                                             ))}
                                                         </select>
+                                                        {user?.role === 'admin' && (
+                                                            <button
+                                                                className="btn btn-sm btn-danger"
+                                                                onClick={() => handleDeleteUser(u.id, u.username)}
+                                                                disabled={saving === u.id}
+                                                                title="Elimina Utente"
+                                                                style={{ padding: '4px 8px' }}
+                                                            >
+                                                                <Trash2 size={14} />
+                                                            </button>
+                                                        )}
                                                         {saving === u.id && <div className="spinner" style={{ width: 16, height: 16 }} />}
                                                     </div>
                                                 ) : (

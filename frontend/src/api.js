@@ -182,4 +182,7 @@ export const api = {
 
     updateUserStatus: (userId, status) =>
         request(`/api/auth/users/${userId}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
+
+    deleteUser: (userId) =>
+        request(`/api/auth/users/${userId}`, { method: 'DELETE' }),
 };

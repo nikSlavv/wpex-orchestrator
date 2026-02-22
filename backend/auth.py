@@ -253,6 +253,29 @@ def update_user_status(user_id: int, body: dict, user=Depends(get_current_user))
     return {"message": "Status aggiornato", "user_id": user_id, "status": status}
 
 
+@router.delete("/users/{user_id}")
+def delete_user(user_id: int, user=Depends(get_current_user)):
+    if user.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Solo gli admin possono eliminare utenti")
+    
+    # Prevent self-deletion
+    if user_id == user["id"]:
+        raise HTTPException(status_code=400, detail="Non puoi eliminare te stesso")
+
+    conn = get_db()
+    cur = conn.cursor()
+    # Check if user exists
+    cur.execute("SELECT id FROM users WHERE id = %s", (user_id,))
+    if not cur.fetchone():
+        conn.close()
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+        
+    cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+    conn.commit()
+    conn.close()
+    return {"message": "Utente eliminato con successo", "user_id": user_id}
+
+
 @router.get("/public/tenants")
 def list_public_tenants():
     """Publicly accessible list of tenants for registration."""
