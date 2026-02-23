@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { api } from '../api';
-import { Link2, Plus, Trash2, RefreshCw, Filter, Settings, ArrowRight } from 'lucide-react';
+import { Link2, Plus, Trash2, RefreshCw, Eye, ArrowRight, Info, Copy, Check } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 
 export default function TunnelList() {
@@ -15,6 +15,8 @@ export default function TunnelList() {
     const [statusFilter, setStatusFilter] = useState('');
     const [form, setForm] = useState({ tenant_id: '', site_a_id: '', site_b_id: '', relay_id: '' });
     const [tenantSites, setTenantSites] = useState([]);
+    const [viewConfig, setViewConfig] = useState(null);
+    const [copiedConfig, setCopiedConfig] = useState(false);
 
     const loadData = async () => {
         try {
@@ -66,12 +68,33 @@ export default function TunnelList() {
         return '';
     };
 
+    const copyToClipboard = async (text) => {
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(text);
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = text;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+            setCopiedConfig(true);
+            setTimeout(() => setCopiedConfig(false), 2000);
+        } catch (err) {
+            alert("Impossibile copiare il testo, selezionalo manualmente.");
+        }
+    };
+
     return (
         <div className="page">
             <Sidebar />
             <div className="main-content">
                 <div className="page-header">
-                    <h1 className="page-title"><Link2 size={26} /> Tunnels</h1>
+                    <h1 className="page-title"><Link2 size={26} /> P2P Routing</h1>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <select className="select" style={{ width: 140 }} value={statusFilter}
                             onChange={e => setStatusFilter(e.target.value)}>
@@ -86,6 +109,19 @@ export default function TunnelList() {
                             </button>
                         )}
                         <button className="btn btn-sm" onClick={loadData}><RefreshCw size={14} /></button>
+                    </div>
+                </div>
+
+                <div className="card" style={{ marginBottom: 20, backgroundColor: 'rgba(52, 211, 153, 0.05)', borderColor: 'var(--accent-green)', padding: 16 }}>
+                    <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+                        <Info size={20} color="var(--accent-green)" style={{ flexShrink: 0, marginTop: 2 }} />
+                        <div>
+                            <h4 style={{ margin: '0 0 6px 0', color: 'var(--text-primary)', fontSize: '0.95rem' }}>Mappatura Organica (AllowedIPs)</h4>
+                            <p style={{ margin: 0, color: 'var(--text-secondary)', fontSize: '0.85rem', lineHeight: 1.5 }}>
+                                I tunnel WPEX sono astrazioni logiche. WPEX non inietta regole di blocco traffico centralizzate sul Relay (il traffico è ruotato liberamente tra peer validi).
+                                Crea un "Tunnel P2P" per documentare il collegamento tra due sedi e generare automaticamente lo script di configurazione <code>JSON / AllowedIPs</code> da caricare sui rispettivi router Mikrotik Edge.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -166,7 +202,10 @@ export default function TunnelList() {
                                         <td><span className={`badge ${statusColor(t.status)}`}>{t.status}</span></td>
                                         <td>v{t.config_version}</td>
                                         <td>
-                                            <div style={{ display: 'flex', gap: 4 }}>
+                                            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => setViewConfig(t)} title="Visualizza Script Configurazione">
+                                                    <Eye size={12} style={{ marginRight: 4 }} /> Payload JSON
+                                                </button>
                                                 {canMutate && (
                                                     <button className="btn btn-sm btn-danger" onClick={() => handleDelete(t.id)}>
                                                         <Trash2 size={12} />
@@ -181,10 +220,49 @@ export default function TunnelList() {
                         {tunnels.length === 0 && (
                             <div className="empty-state">
                                 <Link2 size={48} />
-                                <h3>Nessun tunnel</h3>
-                                <p>Crea tunnel tra siti di un tenant</p>
+                                <h3>Nessuna rotta P2P configurata</h3>
+                                <p>Crea regole di instradamento per generare i configuration payload dei Mikrotik</p>
                             </div>
                         )}
+                    </div>
+                )}
+                {viewConfig && (
+                    <div style={{
+                        position: 'fixed', top: 0, left: 0, right: 0, bottom: 0,
+                        backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(2px)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000
+                    }}>
+                        <div className="card" style={{ width: 600, maxWidth: '90%', maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                                <div>
+                                    <h3 style={{ margin: 0, fontSize: '1.2rem' }}>Configurazione di Instradamento </h3>
+                                    <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: 4 }}>
+                                        {viewConfig.site_a?.name} &harr; {viewConfig.site_b?.name} (Relay: {viewConfig.relay})
+                                    </div>
+                                </div>
+                                <div style={{ display: 'flex', gap: 8 }}>
+                                    <button
+                                        className={`btn btn-sm ${copiedConfig ? 'btn-success' : 'btn-secondary'}`}
+                                        onClick={() => copyToClipboard(JSON.stringify(viewConfig.config, null, 2))}
+                                    >
+                                        {copiedConfig ? <Check size={14} /> : <Copy size={14} />}
+                                        {copiedConfig ? 'Copiato!' : 'Copia'}
+                                    </button>
+                                    <button className="btn btn-sm" onClick={() => setViewConfig(null)}>Chiudi</button>
+                                </div>
+                            </div>
+                            <div style={{
+                                backgroundColor: '#1e1e1e', color: '#d4d4d4',
+                                padding: 16, borderRadius: 6, overflowY: 'auto', flex: 1,
+                                fontSize: '0.85rem', fontFamily: 'monospace', whiteSpace: 'pre-wrap'
+                            }}>
+                                {JSON.stringify(viewConfig.config, null, 2)}
+                            </div>
+                            <div style={{ marginTop: 12, fontSize: '0.8rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                                <Info size={14} />
+                                Incolla le subnet e le chiavi pubbliche mostrate qui sopra nei rispettivi router di Sede.
+                            </div>
+                        </div>
                     </div>
                 )}
             </div>
