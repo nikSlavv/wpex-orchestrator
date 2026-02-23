@@ -67,6 +67,18 @@ export default function TenantsPage() {
         try { await api.deleteSite(tenantId, siteId); handleExpand(tenantId); loadData(); } catch (e) { alert(e.message); }
     };
 
+    const handleSetSlug = async (id, currentName) => {
+        const newSlug = window.prompt(`Inserisci lo slug per ${currentName}:`);
+        if (newSlug) {
+            try {
+                await api.updateTenant(id, { slug: newSlug });
+                loadData();
+            } catch (e) {
+                alert(e.message);
+            }
+        }
+    };
+
     return (
         <div className="page">
             <Sidebar />
@@ -118,7 +130,11 @@ export default function TenantsPage() {
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                                         {expanded === t.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
                                         <span style={{ fontWeight: 600 }}>{t.name}</span>
-                                        <span className="badge">{t.slug}</span>
+                                        {t.slug ? (
+                                            <span className="badge">{t.slug}</span>
+                                        ) : (
+                                            isAdmin && <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); handleSetSlug(t.id, t.name); }}>+ Aggiungi Slug</button>
+                                        )}
                                         {!t.is_active && <span className="badge" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--accent-red)' }}>Inattivo</span>}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -161,12 +177,7 @@ export default function TenantsPage() {
 
                                         {/* Sites */}
                                         <div className="section-header">
-                                            <h4 className="section-title"><MapPin size={16} /> Siti</h4>
-                                            {canManageSites && (
-                                                <button className="btn btn-sm" onClick={() => setShowSiteCreate(showSiteCreate === t.id ? null : t.id)}>
-                                                    <Plus size={14} /> Aggiungi Site
-                                                </button>
-                                            )}
+                                            <h4 className="section-title"><MapPin size={16} /> Siti ({tenantDetail.sites?.length || 0})</h4>
                                         </div>
 
                                         {showSiteCreate === t.id && canManageSites && (

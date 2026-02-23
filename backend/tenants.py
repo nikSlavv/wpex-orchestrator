@@ -24,6 +24,7 @@ class CreateTenantRequest(BaseModel):
 
 class UpdateTenantRequest(BaseModel):
     name: Optional[str] = None
+    slug: Optional[str] = None
     max_bandwidth_mbps: Optional[int] = None
     sla_target: Optional[float] = None
     allowed_regions: Optional[List[str]] = None
@@ -149,10 +150,14 @@ def update_tenant(tenant_id: int, body: UpdateTenantRequest, user=Depends(get_cu
     conn = get_db()
     cur = conn.cursor()
     updates = []
-    values = []
+    values = [] # type: list
     if body.name is not None:
         updates.append("name = %s")
         values.append(body.name)
+    if body.slug is not None:
+        updates.append("slug = %s")
+        val = str(body.slug).lower().replace(" ", "-")
+        values.append(val)
     if body.max_bandwidth_mbps is not None:
         updates.append("max_bandwidth_mbps = %s")
         values.append(body.max_bandwidth_mbps)
