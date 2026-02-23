@@ -89,6 +89,13 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
         cur.execute("SELECT COUNT(*) FROM tenants WHERE is_active = TRUE")
     tenants_active = cur.fetchone()[0]
 
+    # Keys Assigned
+    if is_tenant_scoped:
+        cur.execute("SELECT COUNT(*) FROM access_keys WHERE tenant_id = %s", (tenant_id,))
+    else:
+        cur.execute("SELECT COUNT(*) FROM access_keys")
+    keys_assigned = cur.fetchone()[0]
+
     # (Tunnels count removed)
 
     # Get relay details for health computation
@@ -165,6 +172,7 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
         "relays_active": relays_active,
         "relays_total": relays_total,
         "tenants_active": tenants_active,
+        "keys_assigned": keys_assigned,
         "bandwidth_aggregated_mb": bandwidth_mbps,
         "total_peers": total_peers,
         "global_health_score": global_health,

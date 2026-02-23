@@ -213,13 +213,12 @@ function renderServerTable(servers, kpi, canMutate, handleStart, handleStop, han
         <table className="data-table">
             <thead>
                 <tr>
-                    <th>Relay</th>
-                    <th>Status</th>
-                    <th>Porta UDP</th>
-                    <th>Web Port</th>
-                    <th>Health</th>
-                    <th>Peers</th>
-                    <th>Azioni</th>
+                    <th style={{ width: '25%' }}>Relay</th>
+                    <th style={{ width: '15%' }}>Status</th>
+                    <th style={{ width: '15%' }}>Porta UDP</th>
+                    <th style={{ width: '10%' }}>Health</th>
+                    <th style={{ width: '10%' }}>Peers</th>
+                    <th style={{ width: '25%' }}>Azioni</th>
                 </tr>
             </thead>
             <tbody>
@@ -241,8 +240,7 @@ function renderServerTable(servers, kpi, canMutate, handleStart, handleStop, han
                                     <span className={`status-dot ${s.status || 'not_created'}`} /> {s.status || 'N/A'}
                                 </span>
                             </td>
-                            <td>{s.port}</td>
-                            <td>{s.web_port}</td>
+                            <td>{s.udp_port}</td>
                             <td>
                                 {relayKpi ? (
                                     <span style={{ color: relayKpi.health >= 80 ? 'var(--accent-green)' : relayKpi.health >= 50 ? 'var(--accent-amber)' : 'var(--accent-red)', fontWeight: 600 }}>

@@ -4,7 +4,7 @@ import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import {
     Server, Link2, Users, Activity, AlertTriangle, AlertCircle,
-    ArrowUp, ArrowDown, Wifi, Shield, RefreshCw, ChevronRight
+    ArrowUp, ArrowDown, Wifi, Shield, RefreshCw, ChevronRight, Key
 } from 'lucide-react';
 
 import { useAuth } from '../AuthContext';
@@ -82,9 +82,9 @@ export default function Dashboard() {
                                 <div className="kpi-sub">{kpi.relays_total - kpi.relays_active} inattivi</div>
                             </div>
                             <div className="kpi-card">
-                                <div className="kpi-label"><Link2 size={14} /> Tunnel</div>
-                                <div className="kpi-value blue">{kpi.tunnels_active}/{kpi.tunnels_total}</div>
-                                <div className="kpi-sub">{kpi.tunnels_degraded} degradati</div>
+                                <div className="kpi-label"><Key size={14} /> Keys Assignate</div>
+                                <div className="kpi-value blue">{kpi.keys_assigned}</div>
+                                <div className="kpi-sub">Wireguard Peers</div>
                             </div>
                             {isAdmin && (
                                 <div className="kpi-card">
