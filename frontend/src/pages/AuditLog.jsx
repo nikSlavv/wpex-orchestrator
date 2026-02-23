@@ -60,49 +60,51 @@ export default function AuditLog() {
                         <div className="loading-screen" style={{ minHeight: 200 }}><div className="spinner" /></div>
                     ) : (
                         <>
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Data</th>
-                                        <th>Utente</th>
-                                        <th>Azione</th>
-                                        <th>Entità</th>
-                                        <th>ID</th>
-                                        <th>IP</th>
-                                        <th>Dettagli</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {logs.map(l => (
-                                        <tr key={l.id}>
-                                            <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
-                                                {l.created_at ? new Date(l.created_at).toLocaleString('it-IT') : '—'}
-                                            </td>
-                                            <td style={{ fontWeight: 500 }}>{l.username || '—'}</td>
-                                            <td>
-                                                <span style={{ color: actionColor(l.action), fontWeight: 500 }}>
-                                                    {l.action}
-                                                </span>
-                                            </td>
-                                            <td><span className="badge">{l.entity_type || '—'}</span></td>
-                                            <td>#{l.entity_id || '—'}</td>
-                                            <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{l.ip_address || '—'}</td>
-                                            <td>
-                                                {l.details ? (
-                                                    <details>
-                                                        <summary style={{ cursor: 'pointer', fontSize: '0.82rem', color: 'var(--accent-purple-light)' }}>
-                                                            Mostra
-                                                        </summary>
-                                                        <div className="code-block" style={{ marginTop: 4, maxHeight: 120 }}>
-                                                            {JSON.stringify(l.details, null, 2)}
-                                                        </div>
-                                                    </details>
-                                                ) : '—'}
-                                            </td>
+                            <div className="table-responsive">
+                                <table className="data-table">
+                                    <thead>
+                                        <tr>
+                                            <th>Data</th>
+                                            <th>Utente</th>
+                                            <th>Azione</th>
+                                            <th>Entità</th>
+                                            <th>ID</th>
+                                            <th>IP</th>
+                                            <th>Dettagli</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {logs.map(l => (
+                                            <tr key={l.id}>
+                                                <td style={{ fontSize: '0.82rem', color: 'var(--text-muted)', whiteSpace: 'nowrap' }}>
+                                                    {l.created_at ? new Date(l.created_at).toLocaleString('it-IT') : '—'}
+                                                </td>
+                                                <td style={{ fontWeight: 500 }}>{l.username || '—'}</td>
+                                                <td>
+                                                    <span style={{ color: actionColor(l.action), fontWeight: 500 }}>
+                                                        {l.action}
+                                                    </span>
+                                                </td>
+                                                <td><span className="badge">{l.entity_type || '—'}</span></td>
+                                                <td>#{l.entity_id || '—'}</td>
+                                                <td style={{ fontFamily: 'monospace', fontSize: '0.82rem' }}>{l.ip_address || '—'}</td>
+                                                <td>
+                                                    {l.details ? (
+                                                        <details>
+                                                            <summary style={{ cursor: 'pointer', fontSize: '0.82rem', color: 'var(--accent-purple-light)' }}>
+                                                                Mostra
+                                                            </summary>
+                                                            <div className="code-block" style={{ marginTop: 4, maxHeight: 120 }}>
+                                                                {JSON.stringify(l.details, null, 2)}
+                                                            </div>
+                                                        </details>
+                                                    ) : '—'}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
 
                             {logs.length === 0 && (
                                 <div className="empty-state">

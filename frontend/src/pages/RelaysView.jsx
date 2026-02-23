@@ -210,71 +210,73 @@ export default function RelaysView() {
 function renderServerTable(servers, kpi, canMutate, handleStart, handleStop, handleDelete) {
     if (servers.length === 0) return <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Nessun relay in questa organizzazione.</p>;
     return (
-        <table className="data-table">
-            <thead>
-                <tr>
-                    <th style={{ width: '25%' }}>Relay</th>
-                    <th style={{ width: '15%' }}>Status</th>
-                    <th style={{ width: '15%' }}>Porta UDP</th>
-                    <th style={{ width: '10%' }}>Health</th>
-                    <th style={{ width: '10%' }}>Peers</th>
-                    <th style={{ width: '25%' }}>Azioni</th>
-                </tr>
-            </thead>
-            <tbody>
-                {servers.map(s => {
-                    const relayKpi = kpi?.relays?.find(r => r.name === s.name);
-                    return (
-                        <tr key={s.id}>
-                            <td>
-                                <Link to={`/relays/${s.id}`} style={{ color: 'var(--accent-purple-light)', textDecoration: 'none', fontWeight: 600 }}>
-                                    {s.name}
-                                </Link>
-                            </td>
-                            <td>
-                                <span className="badge badge-green" style={
-                                    s.status === 'running' ? {} :
-                                        s.status === 'exited' ? { background: 'rgba(248,113,113,0.12)', color: 'var(--accent-red)', borderColor: 'rgba(248,113,113,0.2)' } :
-                                            { background: 'rgba(251,191,36,0.12)', color: 'var(--accent-amber)', borderColor: 'rgba(251,191,36,0.2)' }
-                                }>
-                                    <span className={`status-dot ${s.status || 'not_created'}`} /> {s.status || 'N/A'}
-                                </span>
-                            </td>
-                            <td>{s.udp_port}</td>
-                            <td>
-                                {relayKpi ? (
-                                    <span style={{ color: relayKpi.health >= 80 ? 'var(--accent-green)' : relayKpi.health >= 50 ? 'var(--accent-amber)' : 'var(--accent-red)', fontWeight: 600 }}>
-                                        {relayKpi.health}%
-                                    </span>
-                                ) : '—'}
-                            </td>
-                            <td>{relayKpi ? relayKpi.peers_count : '—'}</td>
-                            <td>
-                                <div style={{ display: 'flex', gap: 4 }}>
-                                    {canMutate && s.status !== 'running' && (
-                                        <button className="btn btn-sm" onClick={() => handleStart(s.id)} title="Avvia">
-                                            <Play size={12} />
-                                        </button>
-                                    )}
-                                    {canMutate && s.status === 'running' && (
-                                        <button className="btn btn-sm" onClick={() => handleStop(s.id)} title="Ferma">
-                                            <Square size={12} />
-                                        </button>
-                                    )}
-                                    <Link to={`/relays/${s.id}`} className="btn btn-sm" title="Dettagli">
-                                        <ChevronRight size={12} />
+        <div className="table-responsive">
+            <table className="data-table">
+                <thead>
+                    <tr>
+                        <th style={{ width: '25%' }}>Relay</th>
+                        <th style={{ width: '15%' }}>Status</th>
+                        <th style={{ width: '15%' }}>Porta UDP</th>
+                        <th style={{ width: '10%' }}>Health</th>
+                        <th style={{ width: '10%' }}>Peers</th>
+                        <th style={{ width: '25%' }}>Azioni</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {servers.map(s => {
+                        const relayKpi = kpi?.relays?.find(r => r.name === s.name);
+                        return (
+                            <tr key={s.id}>
+                                <td>
+                                    <Link to={`/relays/${s.id}`} style={{ color: 'var(--accent-purple-light)', textDecoration: 'none', fontWeight: 600 }}>
+                                        {s.name}
                                     </Link>
-                                    {canMutate && (
-                                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s.id)} title="Elimina">
-                                            <Trash2 size={12} />
-                                        </button>
-                                    )}
-                                </div>
-                            </td>
-                        </tr>
-                    );
-                })}
-            </tbody>
-        </table>
+                                </td>
+                                <td>
+                                    <span className="badge badge-green" style={
+                                        s.status === 'running' ? {} :
+                                            s.status === 'exited' ? { background: 'rgba(248,113,113,0.12)', color: 'var(--accent-red)', borderColor: 'rgba(248,113,113,0.2)' } :
+                                                { background: 'rgba(251,191,36,0.12)', color: 'var(--accent-amber)', borderColor: 'rgba(251,191,36,0.2)' }
+                                    }>
+                                        <span className={`status-dot ${s.status || 'not_created'}`} /> {s.status || 'N/A'}
+                                    </span>
+                                </td>
+                                <td>{s.udp_port}</td>
+                                <td>
+                                    {relayKpi ? (
+                                        <span style={{ color: relayKpi.health >= 80 ? 'var(--accent-green)' : relayKpi.health >= 50 ? 'var(--accent-amber)' : 'var(--accent-red)', fontWeight: 600 }}>
+                                            {relayKpi.health}%
+                                        </span>
+                                    ) : '—'}
+                                </td>
+                                <td>{relayKpi ? relayKpi.peers_count : '—'}</td>
+                                <td>
+                                    <div style={{ display: 'flex', gap: 4 }}>
+                                        {canMutate && s.status !== 'running' && (
+                                            <button className="btn btn-sm" onClick={() => handleStart(s.id)} title="Avvia">
+                                                <Play size={12} />
+                                            </button>
+                                        )}
+                                        {canMutate && s.status === 'running' && (
+                                            <button className="btn btn-sm" onClick={() => handleStop(s.id)} title="Ferma">
+                                                <Square size={12} />
+                                            </button>
+                                        )}
+                                        <Link to={`/relays/${s.id}`} className="btn btn-sm" title="Dettagli">
+                                            <ChevronRight size={12} />
+                                        </Link>
+                                        {canMutate && (
+                                            <button className="btn btn-sm btn-danger" onClick={() => handleDelete(s.id)} title="Elimina">
+                                                <Trash2 size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </td>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
     );
 }

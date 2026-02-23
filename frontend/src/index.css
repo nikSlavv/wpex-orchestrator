@@ -537,6 +537,7 @@ input[type="number"] {
   margin-left: 260px;
   padding: 32px;
   animation: fadeIn 0.4s ease-out;
+  transition: margin-left 0.3s cubic-bezier(.4, 0, .2, 1);
 }
 
 .page-header {
@@ -544,6 +545,7 @@ input[type="number"] {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 32px;
+  gap: 12px;
 }
 
 .page-title {
@@ -552,6 +554,46 @@ input[type="number"] {
   display: flex;
   align-items: center;
   gap: 12px;
+}
+
+/* ── Mobile Nav Overlay ──────────────── */
+.sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 90;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.sidebar-overlay.open {
+  display: block;
+  opacity: 1;
+}
+
+.mobile-menu-btn {
+  display: none;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  padding: 8px;
+  margin-left: -8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: var(--transition);
+}
+
+.mobile-menu-btn:hover {
+  background: var(--bg-card-hover);
+}
+
+/* ── Responsive Tables ───────────────── */
+.table-responsive {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 /* ── Grid ─────────────────────────────── */
@@ -609,11 +651,30 @@ input[type="number"] {
 /* ── Responsive ──────────────────────── */
 @media (max-width: 900px) {
   .sidebar {
-    display: none;
+    transform: translateX(-100%);
+    transition: transform 0.3s cubic-bezier(.4, 0, .2, 1);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+  }
+
+  .sidebar.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sidebar.collapsed {
+    transform: translateX(-100%);
   }
 
   .main-content {
-    margin-left: 0;
+    margin-left: 0 !important;
+    padding: 20px;
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+  }
+
+  .page-title {
+    font-size: 1.3rem;
   }
 
   .grid-3 {

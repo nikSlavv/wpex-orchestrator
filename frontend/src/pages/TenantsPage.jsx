@@ -203,22 +203,24 @@ export default function TenantsPage() {
                                         )}
 
                                         {tenantDetail.sites?.length > 0 ? (
-                                            <table className="data-table">
-                                                <thead>
-                                                    <tr>
-                                                        <th style={{ width: '40%' }}>Alias</th>
-                                                        <th style={{ width: '60%' }}>ID</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    {tenantDetail.sites.map(s => (
-                                                        <tr key={s.id}>
-                                                            <td style={{ fontWeight: 600 }}>{s.alias}</td>
-                                                            <td><span className="badge">#{s.id}</span></td>
+                                            <div className="table-responsive">
+                                                <table className="data-table">
+                                                    <thead>
+                                                        <tr>
+                                                            <th style={{ width: '40%' }}>Alias</th>
+                                                            <th style={{ width: '60%' }}>ID</th>
                                                         </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
+                                                    </thead>
+                                                    <tbody>
+                                                        {tenantDetail.sites.map(s => (
+                                                            <tr key={s.id}>
+                                                                <td style={{ fontWeight: 600 }}>{s.alias}</td>
+                                                                <td><span className="badge">#{s.id}</span></td>
+                                                            </tr>
+                                                        ))}
+                                                    </tbody>
+                                                </table>
+                                            </div>
                                         ) : (
                                             <div className="empty-state" style={{ padding: 16 }}>
                                                 <p>Nessuna chiave presente</p>

@@ -134,19 +134,21 @@ export default function KeysPage() {
                         {(() => {
                             if (!isAdmin) {
                                 return (
-                                    <table className="data-table">
-                                        <thead>
-                                            <tr>
-                                                <th style={{ width: '10%' }}>ID</th>
-                                                <th style={{ width: '25%' }}>Alias</th>
-                                                <th style={{ width: '50%' }}>Chiave</th>
-                                                <th style={{ width: '15%' }}>Azioni</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {keys.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
-                                        </tbody>
-                                    </table>
+                                    <div className="table-responsive">
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr>
+                                                    <th style={{ width: '10%' }}>ID</th>
+                                                    <th style={{ width: '25%' }}>Alias</th>
+                                                    <th style={{ width: '50%' }}>Chiave</th>
+                                                    <th style={{ width: '15%' }}>Azioni</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {keys.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 );
                             }
 
@@ -165,19 +167,21 @@ export default function KeysPage() {
                                         {group.name}
                                     </h3>
                                     <div style={{ background: 'var(--bg-card-alt)', borderRadius: 8, overflow: 'hidden' }}>
-                                        <table className="data-table">
-                                            <thead>
-                                                <tr>
-                                                    <th style={{ width: '10%' }}>ID</th>
-                                                    <th style={{ width: '25%' }}>Alias</th>
-                                                    <th style={{ width: '50%' }}>Chiave</th>
-                                                    <th style={{ width: '15%' }}>Azioni</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {group.items.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
-                                            </tbody>
-                                        </table>
+                                        <div className="table-responsive">
+                                            <table className="data-table">
+                                                <thead>
+                                                    <tr>
+                                                        <th style={{ width: '10%' }}>ID</th>
+                                                        <th style={{ width: '25%' }}>Alias</th>
+                                                        <th style={{ width: '50%' }}>Chiave</th>
+                                                        <th style={{ width: '15%' }}>Azioni</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    {group.items.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     </div>
                                 </div>
                             ));
