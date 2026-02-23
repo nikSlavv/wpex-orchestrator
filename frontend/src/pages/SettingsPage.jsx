@@ -189,9 +189,9 @@ export default function SettingsPage() {
                                         <th style={{ width: '15%' }}>Username</th>
                                         <th style={{ width: '10%' }}>Ruolo</th>
                                         <th style={{ width: '10%' }}>Stato</th>
-                                        <th style={{ width: '20%' }}>Tenant</th>
-                                        <th style={{ width: '15%' }}>Creato il</th>
-                                        <th style={{ width: '25%' }}>Azioni</th>
+                                        <th style={{ width: '15%' }}>Tenant</th>
+                                        <th style={{ width: '10%' }}>Creato il</th>
+                                        <th style={{ width: '35%' }}>Azioni</th>
                                     </tr>
                                 </thead>
                                 <tbody>
