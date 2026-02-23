@@ -61,13 +61,27 @@ services:
     image: nginx:alpine
     ports:
       - "80:80"
+      - "443:443"
     volumes:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./cert-data/conf:/etc/letsencrypt
+      - ./cert-data/www:/var/www/certbot
     networks:
       - wpex-network
     depends_on:
       - backend
       - frontend
+    deploy:
+      placement:
+        constraints: [node.role == manager]
+
+  # 5. Let's Encrypt Certbot
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./cert-data/conf:/etc/letsencrypt
+      - ./cert-data/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
     deploy:
       placement:
         constraints: [node.role == manager]
