@@ -43,11 +43,10 @@ export default function AuditLog() {
                         <input className="input" placeholder="Filtra azione..." value={actionFilter}
                             onChange={e => { setActionFilter(e.target.value); setPage(1); }}
                             style={{ width: 160 }} />
-                        <select className="select" style={{ width: 140 }} value={entityFilter}
+                        <select className="select" value={entityFilter}
                             onChange={e => { setEntityFilter(e.target.value); setPage(1); }}>
                             <option value="">Tutte le entità</option>
                             <option value="relay">Relay</option>
-                            <option value="tunnel">Tunnel</option>
                             <option value="tenant">Tenant</option>
                             <option value="site">Site</option>
                             <option value="user">User</option>
