@@ -3,7 +3,7 @@ import { useAuth } from './AuthContext';
 import LandingPage from './pages/LandingPage';
 import LoginPage from './pages/LoginPage';
 import Dashboard from './pages/Dashboard';
-import NetworkView from './pages/NetworkView';
+import RelaysView from './pages/RelaysView';
 import RelayView from './pages/RelayView';
 import TopologyMap from './pages/TopologyMap';
 import TenantsPage from './pages/TenantsPage';
@@ -32,8 +32,7 @@ export default function App() {
             <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <LoginPage />} />
             <Route path="/pending" element={user && user.status !== 'active' ? <PendingApprovalPage /> : <Navigate to="/dashboard" />} />
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-            <Route path="/network" element={<ProtectedRoute><NetworkView /></ProtectedRoute>} />
-            <Route path="/relays" element={<ProtectedRoute><NetworkView /></ProtectedRoute>} />
+            <Route path="/relays" element={<ProtectedRoute><RelaysView /></ProtectedRoute>} />
             <Route path="/relays/:id" element={<ProtectedRoute><RelayView /></ProtectedRoute>} />
             <Route path="/server/:name" element={<ProtectedRoute><RelayView /></ProtectedRoute>} />
             <Route path="/topology" element={<ProtectedRoute><TopologyMap /></ProtectedRoute>} />

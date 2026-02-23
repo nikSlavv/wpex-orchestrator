@@ -1,14 +1,13 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import {
-    LayoutDashboard, Network, Map, Server, Link2, Users,
+    LayoutDashboard, Map, Server, Link2, Users,
     Key, Settings, FileText, Shield, LogOut, User, ChevronDown, ChevronRight, Activity
 } from 'lucide-react';
 import { useState } from 'react';
 
 const NAV_ITEMS = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Overview', roles: ['admin', 'executive', 'engineer'] },
-    { to: '/network', icon: Network, label: 'Network', roles: ['admin', 'engineer'] },
     { to: '/topology', icon: Map, label: 'Topology', roles: ['admin', 'engineer'] },
     { divider: true },
     { to: '/relays', icon: Server, label: 'Relays', roles: ['admin', 'engineer'] },

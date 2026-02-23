@@ -145,7 +145,7 @@ export default function RelayView() {
             <div className="main-content">
                 <div className="page-header">
                     <h1 className="page-title">
-                        <Link to="/network" className="btn btn-sm" style={{ marginRight: 8 }}>
+                        <Link to="/relays" className="btn btn-sm" style={{ marginRight: 8 }}>
                             <ChevronLeft size={14} />
                         </Link>
                         <Server size={26} /> {health?.relay_name || name || `Relay #${relayId}`}

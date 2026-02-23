@@ -8,7 +8,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 
-export default function NetworkView() {
+export default function RelaysView() {
     const { user } = useAuth();
     const canMutate = !['viewer', 'executive'].includes(user?.role);
     const [servers, setServers] = useState([]);
@@ -81,7 +81,7 @@ export default function NetworkView() {
             <Sidebar />
             <div className="main-content">
                 <div className="page-header">
-                    <h1 className="page-title"><Server size={26} /> Network Engineer</h1>
+                    <h1 className="page-title"><Server size={26} /> Relays</h1>
                     <div style={{ display: 'flex', gap: 8 }}>
                         <div style={{ position: 'relative' }}>
                             <Search size={16} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
