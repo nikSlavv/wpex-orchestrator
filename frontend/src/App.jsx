@@ -8,7 +8,6 @@ import RelayView from './pages/RelayView';
 import TopologyMap from './pages/TopologyMap';
 import TenantsPage from './pages/TenantsPage';
 import KeysPage from './pages/KeysPage';
-import ConfigManager from './pages/ConfigManager';
 import AuditLog from './pages/AuditLog';
 import SettingsPage from './pages/SettingsPage';
 import PendingApprovalPage from './pages/PendingApprovalPage';
@@ -38,7 +37,6 @@ export default function App() {
             <Route path="/topology" element={<ProtectedRoute><TopologyMap /></ProtectedRoute>} />
             <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
             <Route path="/keys" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />
-            <Route path="/config" element={<ProtectedRoute><ConfigManager /></ProtectedRoute>} />
             <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />

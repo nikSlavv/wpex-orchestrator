@@ -8,6 +8,7 @@ from typing import Optional
 
 from database import get_db, DATA_KEY
 from auth import get_current_user
+from audit import log_audit_event
 
 router = APIRouter(prefix="/api/keys", tags=["keys"])
 
@@ -57,6 +58,15 @@ def create_key(body: CreateKeyRequest, user=Depends(get_current_user)):
         key_id = cur.fetchone()[0]
         conn.commit()
         conn.close()
+        
+        log_audit_event(
+            user_id=user["id"],
+            action="create",
+            entity_type="key",
+            entity_id=key_id,
+            details={"alias": body.alias}
+        )
+        
         return {"id": key_id, "message": "Chiave creata", "tenant_id": tenant_id}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -80,4 +90,12 @@ def delete_key(key_id: int, user=Depends(get_current_user)):
     cur.execute("DELETE FROM access_keys WHERE id = %s", (key_id,))
     conn.commit()
     conn.close()
+    
+    log_audit_event(
+        user_id=user["id"],
+        action="delete",
+        entity_type="key",
+        entity_id=key_id
+    )
+    
     return {"message": "Chiave eliminata"}

@@ -11,6 +11,7 @@ import requests
 
 from database import get_db, DATA_KEY
 from auth import get_current_user
+from audit import log_audit_event
 
 router = APIRouter(prefix="/api/servers", tags=["servers"])
 
@@ -169,6 +170,15 @@ def create_server(body: CreateServerRequest, user=Depends(get_current_user)):
         conn.close()
 
         ok, msg = _deploy_container(name, body.udp_port, web_port, raw_keys)
+        
+        log_audit_event(
+            user_id=user["id"],
+            action="create",
+            entity_type="relay",
+            entity_id=server_id,
+            details={"name": name, "udp_port": body.udp_port}
+        )
+        
         if not ok:
             return {"id": server_id, "warning": msg}
         return {"id": server_id, "message": "Server creato e avviato"}
@@ -203,6 +213,15 @@ def delete_server(server_id: int, user=Depends(get_current_user)):
     cur.execute("DELETE FROM servers WHERE id = %s", (server_id,))
     conn.commit()
     conn.close()
+    
+    log_audit_event(
+        user_id=user["id"],
+        action="delete",
+        entity_type="relay",
+        entity_id=server_id,
+        details={"name": name}
+    )
+    
     return {"message": f"Server {name} eliminato"}
 
 
@@ -229,6 +248,15 @@ def start_server(server_id: int, user=Depends(get_current_user)):
             client.containers.get(f"wpex-{name}").start()
         except:
             pass
+            
+    log_audit_event(
+        user_id=user["id"],
+        action="start",
+        entity_type="relay",
+        entity_id=server_id,
+        details={"name": name}
+    )
+    
     return {"message": "Avviato"}
 
 
@@ -255,6 +283,15 @@ def stop_server(server_id: int, user=Depends(get_current_user)):
             client.containers.get(f"wpex-{row[0]}").stop()
         except:
             pass
+            
+    log_audit_event(
+        user_id=user["id"],
+        action="stop",
+        entity_type="relay",
+        entity_id=server_id,
+        details={"name": name}
+    )
+    
     return {"message": "Fermato"}
 
 
@@ -291,6 +328,15 @@ def update_keys(server_id: int, body: UpdateKeysRequest, user=Depends(get_curren
     conn.close()
 
     _deploy_container(name, udp_port, web_port, raw_keys)
+    
+    log_audit_event(
+        user_id=user["id"],
+        action="update_keys",
+        entity_type="relay",
+        entity_id=server_id,
+        details={"name": name, "key_count": len(body.key_ids)}
+    )
+    
     return {"message": "Chiavi aggiornate e server riavviato"}
 
 

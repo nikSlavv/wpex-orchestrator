@@ -9,6 +9,7 @@ from typing import List, Optional
 
 from database import get_db, generate_api_key
 from auth import get_current_user
+from audit import log_audit_event
 
 router = APIRouter(prefix="/api/tenants", tags=["tenants"])
 
@@ -98,6 +99,15 @@ def create_tenant(body: CreateTenantRequest, user=Depends(get_current_user)):
         tenant_id = cur.fetchone()[0]
         conn.commit()
         conn.close()
+        
+        log_audit_event(
+            user_id=user["id"],
+            action="create",
+            entity_type="tenant",
+            entity_id=tenant_id,
+            details={"name": body.name, "slug": body.slug}
+        )
+        
         return {"id": tenant_id, "api_key": api_key, "message": "Tenant creato"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -183,6 +193,15 @@ def update_tenant(tenant_id: int, body: UpdateTenantRequest, user=Depends(get_cu
     cur.execute(f"UPDATE tenants SET {', '.join(updates)} WHERE id = %s", values)
     conn.commit()
     conn.close()
+    
+    log_audit_event(
+        user_id=user["id"],
+        action="update",
+        entity_type="tenant",
+        entity_id=tenant_id,
+        details={"fields_updated": [u.split(' =')[0] for u in updates if u != "updated_at = CURRENT_TIMESTAMP"]}
+    )
+    
     return {"message": "Tenant aggiornato"}
 
 
@@ -196,6 +215,14 @@ def delete_tenant(tenant_id: int, user=Depends(get_current_user)):
     cur.execute("DELETE FROM tenants WHERE id = %s", (tenant_id,))
     conn.commit()
     conn.close()
+    
+    log_audit_event(
+        user_id=user["id"],
+        action="delete",
+        entity_type="tenant",
+        entity_id=tenant_id
+    )
+    
     return {"message": "Tenant eliminato"}
 
 
@@ -237,6 +264,15 @@ def create_site(tenant_id: int, body: CreateSiteRequest, user=Depends(get_curren
         site_id = cur.fetchone()[0]
         conn.commit()
         conn.close()
+        
+        log_audit_event(
+            user_id=user["id"],
+            action="create",
+            entity_type="site",
+            entity_id=site_id,
+            details={"name": body.name, "tenant_id": tenant_id}
+        )
+        
         return {"id": site_id, "message": "Site creato"}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -254,6 +290,15 @@ def delete_site(tenant_id: int, site_id: int, user=Depends(get_current_user)):
     cur.execute("DELETE FROM sites WHERE id = %s AND tenant_id = %s", (site_id, tenant_id))
     conn.commit()
     conn.close()
+    
+    log_audit_event(
+        user_id=user["id"],
+        action="delete",
+        entity_type="site",
+        entity_id=site_id,
+        details={"tenant_id": tenant_id}
+    )
+    
     return {"message": "Site eliminato"}
 
 
