@@ -12,7 +12,12 @@ export function AuthProvider({ children }) {
         if (token) {
             api.me()
                 .then(data => setUser(data))
-                .catch(() => clearToken())
+                .catch((e) => {
+                    if (e.message === 'Non autenticato') clearToken();
+                    // On 500 errors, we intentionally do NOT clear the token.
+                    // React will naturally route to Login since user is null, 
+                    // but the user only needs to refresh again to re-enter.
+                })
                 .finally(() => setLoading(false));
         } else {
             setLoading(false);
