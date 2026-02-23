@@ -46,20 +46,76 @@ export default function TopologyMap() {
         filteredEdges.forEach(e => { connectedNodeIds.add(e.source); connectedNodeIds.add(e.target); });
         const filteredNodes = filter === 'all' ? nodes : nodes.filter(n => connectedNodeIds.has(n.id));
 
-        // Layout — relays in center ring, sites in outer ring
-        const relays = filteredNodes.filter(n => n.type === 'relay');
-        const sites = filteredNodes.filter(n => n.type === 'site');
+        // Collect unique tenants to create cluster centers
+        const tenantClusters = {};
+        let tCount = 0;
+        filteredNodes.forEach(n => {
+            const tId = n.data?.tenant_id || 0;
+            if (!tenantClusters[tId]) {
+                tenantClusters[tId] = { id: tId, nodes: [], index: tCount++ };
+            }
+            tenantClusters[tId].nodes.push(n);
+        });
 
         const nodePositions = {};
-        relays.forEach((n, i) => {
-            const angle = (2 * Math.PI * i) / Math.max(relays.length, 1) - Math.PI / 2;
-            const r = Math.min(width, height) * 0.15;
-            nodePositions[n.id] = { x: centerX + r * Math.cos(angle), y: centerY + r * Math.sin(angle) };
-        });
-        sites.forEach((n, i) => {
-            const angle = (2 * Math.PI * i) / Math.max(sites.length, 1);
-            const r = Math.min(width, height) * 0.35;
-            nodePositions[n.id] = { x: centerX + r * Math.cos(angle), y: centerY + r * Math.sin(angle) };
+        const numClusters = Object.keys(tenantClusters).length;
+
+        // Layout per cluster
+        Object.values(tenantClusters).forEach(cluster => {
+            // Cluster center
+            let cx = centerX;
+            let cy = centerY;
+
+            if (numClusters > 1) {
+                // Distribute clusters in a macro-ring
+                const macroAngle = (2 * Math.PI * cluster.index) / numClusters;
+                const macroRadius = Math.min(width, height) * 0.28;
+                cx = centerX + macroRadius * Math.cos(macroAngle);
+                cy = centerY + macroRadius * Math.sin(macroAngle);
+
+                // Draw an underlay circle for the tenant cluster to visually segregate it
+                const gBg = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+
+                const bgCircle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+                bgCircle.setAttribute('cx', cx);
+                bgCircle.setAttribute('cy', cy);
+                bgCircle.setAttribute('r', Math.min(width, height) * 0.2);
+                bgCircle.setAttribute('fill', 'rgba(124, 106, 239, 0.03)');
+                bgCircle.setAttribute('stroke', 'rgba(124, 106, 239, 0.1)');
+                bgCircle.setAttribute('stroke-width', '1');
+                gBg.appendChild(bgCircle);
+
+                const tLabel = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+                tLabel.setAttribute('x', cx);
+                tLabel.setAttribute('y', cy - Math.min(width, height) * 0.2 - 10);
+                tLabel.setAttribute('text-anchor', 'middle');
+                tLabel.setAttribute('fill', 'var(--text-muted)');
+                tLabel.setAttribute('font-size', '12');
+                tLabel.setAttribute('font-weight', '600');
+                tLabel.setAttribute('opacity', '0.6');
+                const tName = cluster.nodes.find(n => n.data?.tenant)?.data?.tenant || (cluster.id == 0 ? "Globale" : `Tenant #${cluster.id}`);
+                tLabel.textContent = tName;
+                gBg.appendChild(tLabel);
+
+                svg.appendChild(gBg);
+            }
+
+            const cRelays = cluster.nodes.filter(n => n.type === 'relay');
+            const cSites = cluster.nodes.filter(n => n.type === 'site');
+
+            // Position relays near center of cluster
+            cRelays.forEach((n, i) => {
+                const angle = (2 * Math.PI * i) / Math.max(cRelays.length, 1) - Math.PI / 2;
+                const r = numClusters > 1 ? 40 : Math.min(width, height) * 0.15;
+                nodePositions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+            });
+
+            // Position sites on outer edge of cluster
+            cSites.forEach((n, i) => {
+                const angle = (2 * Math.PI * i) / Math.max(cSites.length, 1);
+                const r = numClusters > 1 ? 100 : Math.min(width, height) * 0.35;
+                nodePositions[n.id] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+            });
         });
 
         // Draw edges

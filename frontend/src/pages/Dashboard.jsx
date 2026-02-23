@@ -7,6 +7,8 @@ import {
     ArrowUp, ArrowDown, Wifi, Shield, RefreshCw, ChevronRight
 } from 'lucide-react';
 
+import { useAuth } from '../AuthContext';
+
 function HealthRing({ value, size = 56 }) {
     const radius = (size - 8) / 2;
     const circumference = 2 * Math.PI * radius;
@@ -32,6 +34,8 @@ function HealthRing({ value, size = 56 }) {
 }
 
 export default function Dashboard() {
+    const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
     const [kpi, setKpi] = useState(null);
     const [alerts, setAlerts] = useState(null);
     const [loading, setLoading] = useState(true);
@@ -82,11 +86,13 @@ export default function Dashboard() {
                                 <div className="kpi-value blue">{kpi.tunnels_active}/{kpi.tunnels_total}</div>
                                 <div className="kpi-sub">{kpi.tunnels_degraded} degradati</div>
                             </div>
-                            <div className="kpi-card">
-                                <div className="kpi-label"><Users size={14} /> Tenants</div>
-                                <div className="kpi-value purple">{kpi.tenants_active}</div>
-                                <div className="kpi-sub">Organizzazioni attive</div>
-                            </div>
+                            {isAdmin && (
+                                <div className="kpi-card">
+                                    <div className="kpi-label"><Users size={14} /> Tenants</div>
+                                    <div className="kpi-value purple">{kpi.tenants_active}</div>
+                                    <div className="kpi-sub">Organizzazioni attive</div>
+                                </div>
+                            )}
                             <div className="kpi-card">
                                 <div className="kpi-label"><Wifi size={14} /> Peers</div>
                                 <div className="kpi-value green">{kpi.total_peers}</div>
@@ -137,33 +143,40 @@ export default function Dashboard() {
                                     <h3 className="card-title"><Server size={18} /> Relay Health</h3>
                                     <Link to="/relays" className="btn btn-sm"><ChevronRight size={14} /></Link>
                                 </div>
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                                    {kpi.relays.map((r) => (
-                                        <Link key={r.id} to={`/relays/${r.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
-                                            <div className="health-gauge">
-                                                <HealthRing value={r.health} size={40} />
-                                                <div style={{ flex: 1 }}>
-                                                    <div className="health-label">{r.name}</div>
-                                                    <div className="health-detail">
-                                                        <span className={`status-dot ${r.status}`} style={{ marginRight: 6 }} />
-                                                        {r.status} • {r.peers_count} peers
-                                                    </div>
+                                <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                                    {(() => {
+                                        if (kpi.relays.length === 0) {
+                                            return (
+                                                <div className="empty-state" style={{ padding: '24px' }}>
+                                                    <Server size={32} />
+                                                    <p>Nessun relay configurato</p>
                                                 </div>
-                                                <div style={{ textAlign: 'right' }}>
-                                                    <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{r.health}%</div>
-                                                    <div className="health-detail">
-                                                        <ArrowUp size={10} /> {Math.round(r.bytes_transferred / 1024)}KB
-                                                    </div>
+                                            );
+                                        }
+
+                                        if (!isAdmin) {
+                                            return kpi.relays.map((r) => <RelayHealthRow key={r.id} r={r} />);
+                                        }
+
+                                        // Group by tenant for admin
+                                        const grouped = kpi.relays.reduce((acc, r) => {
+                                            const tId = r.tenant_id || 0;
+                                            if (!acc[tId]) acc[tId] = { name: r.tenant_name || 'Globale', items: [] };
+                                            acc[tId].items.push(r);
+                                            return acc;
+                                        }, {});
+
+                                        return Object.values(grouped).map(group => (
+                                            <div key={group.name} style={{ background: 'var(--bg-card-alt)', borderRadius: 8, padding: 8 }}>
+                                                <div style={{ fontSize: '0.75rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 8, paddingLeft: 8, textTransform: 'uppercase' }}>
+                                                    {group.name}
+                                                </div>
+                                                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                                                    {group.items.map(r => <RelayHealthRow key={r.id} r={r} />)}
                                                 </div>
                                             </div>
-                                        </Link>
-                                    ))}
-                                    {kpi.relays.length === 0 && (
-                                        <div className="empty-state" style={{ padding: '24px' }}>
-                                            <Server size={32} />
-                                            <p>Nessun relay configurato</p>
-                                        </div>
-                                    )}
+                                        ));
+                                    })()}
                                 </div>
                             </div>
                         </div>
@@ -177,5 +190,28 @@ export default function Dashboard() {
                 )}
             </div>
         </div>
+    );
+}
+
+function RelayHealthRow({ r }) {
+    return (
+        <Link to={`/relays/${r.id}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div className="health-gauge">
+                <HealthRing value={r.health} size={40} />
+                <div style={{ flex: 1 }}>
+                    <div className="health-label">{r.name}</div>
+                    <div className="health-detail">
+                        <span className={`status-dot ${r.status}`} style={{ marginRight: 6 }} />
+                        {r.status} • {r.peers_count} peers
+                    </div>
+                </div>
+                <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600 }}>{r.health}%</div>
+                    <div className="health-detail">
+                        <ArrowUp size={10} /> {Math.round(r.bytes_transferred / 1024)}KB
+                    </div>
+                </div>
+            </div>
+        </Link>
     );
 }

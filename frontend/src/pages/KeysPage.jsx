@@ -6,6 +6,7 @@ import { useAuth } from '../AuthContext';
 
 export default function KeysPage() {
     const { user } = useAuth();
+    const isAdmin = user?.role === 'admin';
     const canMutate = !['viewer', 'executive'].includes(user?.role);
     const [keys, setKeys] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -130,55 +131,47 @@ export default function KeysPage() {
                                 Passa il mouse sulla chiave per rivelare il valore. <strong>Clicca per copiarla</strong> negli appunti.
                             </div>
                         </div>
-                        <table className="data-table">
-                            <thead>
-                                <tr>
-                                    <th>ID</th><th>Alias</th><th>Chiave</th><th>Azioni</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {keys.map(k => (
-                                    <tr key={k.id}>
-                                        <td>#{k.id}</td>
-                                        <td style={{ fontWeight: 600 }}>{k.alias}</td>
-                                        <td>
-                                            <div className="secret-group">
-                                                <span
-                                                    className="secret"
-                                                    onClick={() => copyKey(k.id, k.key)}
-                                                >
-                                                    {k.key}
-                                                </span>
-                                                {copiedKey === k.id ? (
-                                                    <span style={{
-                                                        position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)',
-                                                        background: 'var(--bg-card)', color: 'var(--accent-green)',
-                                                        fontSize: '0.75rem', padding: '4px 8px', borderRadius: 4, whiteSpace: 'nowrap',
-                                                        border: '1px solid var(--border-subtle)', animation: 'fadeInUp 0.15s ease-out',
-                                                        zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-                                                    }}>
-                                                        Copiata! <Check size={10} style={{ display: 'inline', marginLeft: 2 }} />
-                                                    </span>
-                                                ) : (
-                                                    <span className="hover-msg">
-                                                        Clicca per copiare
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </td>
-                                        <td>
-                                            <div style={{ display: 'flex', gap: 4 }}>
-                                                {canMutate && (
-                                                    <button className="btn btn-sm btn-danger" onClick={() => handleDelete(k.id)}>
-                                                        <Trash2 size={12} />
-                                                    </button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        {(() => {
+                            if (!isAdmin) {
+                                return (
+                                    <table className="data-table">
+                                        <thead>
+                                            <tr><th>ID</th><th>Alias</th><th>Chiave</th><th>Azioni</th></tr>
+                                        </thead>
+                                        <tbody>
+                                            {keys.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
+                                        </tbody>
+                                    </table>
+                                );
+                            }
+
+                            // Admin view: group by tenant
+                            const grouped = keys.reduce((acc, k) => {
+                                const tId = k.tenant_id || 0;
+                                const tName = tenants.find(t => t.id === tId)?.name || (tId === 0 ? 'Globale' : `Tenant #${tId}`);
+                                if (!acc[tId]) acc[tId] = { name: tName, items: [] };
+                                acc[tId].items.push(k);
+                                return acc;
+                            }, {});
+
+                            return Object.values(grouped).map(group => (
+                                <div key={group.name} style={{ marginBottom: 24 }}>
+                                    <h3 style={{ fontSize: '1rem', marginBottom: 12, color: 'var(--text-secondary)' }}>
+                                        {group.name}
+                                    </h3>
+                                    <div style={{ background: 'var(--bg-card-alt)', borderRadius: 8, overflow: 'hidden' }}>
+                                        <table className="data-table">
+                                            <thead>
+                                                <tr><th>ID</th><th>Alias</th><th>Chiave</th><th>Azioni</th></tr>
+                                            </thead>
+                                            <tbody>
+                                                {group.items.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            ));
+                        })()}
                         {keys.length === 0 && (
                             <div className="empty-state">
                                 <Key size={48} />
@@ -190,5 +183,48 @@ export default function KeysPage() {
                 )}
             </div>
         </div>
+    );
+}
+
+function KeyRow({ k, canMutate, copyKey, copiedKey, handleDelete }) {
+    return (
+        <tr>
+            <td>#{k.id}</td>
+            <td style={{ fontWeight: 600 }}>{k.alias}</td>
+            <td>
+                <div className="secret-group">
+                    <span
+                        className="secret"
+                        onClick={() => copyKey(k.id, k.key)}
+                    >
+                        {k.key}
+                    </span>
+                    {copiedKey === k.id ? (
+                        <span style={{
+                            position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)',
+                            background: 'var(--bg-card)', color: 'var(--accent-green)',
+                            fontSize: '0.75rem', padding: '4px 8px', borderRadius: 4, whiteSpace: 'nowrap',
+                            border: '1px solid var(--border-subtle)', animation: 'fadeInUp 0.15s ease-out',
+                            zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                        }}>
+                            Copiata! <Check size={10} style={{ display: 'inline', marginLeft: 2 }} />
+                        </span>
+                    ) : (
+                        <span className="hover-msg">
+                            Clicca per copiare
+                        </span>
+                    )}
+                </div>
+            </td>
+            <td>
+                <div style={{ display: 'flex', gap: 4 }}>
+                    {canMutate && (
+                        <button className="btn btn-sm btn-danger" onClick={() => handleDelete(k.id)}>
+                            <Trash2 size={12} />
+                        </button>
+                    )}
+                </div>
+            </td>
+        </tr>
     );
 }

@@ -93,9 +93,19 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
 
     # Get relay details for health computation
     if is_tenant_scoped:
-        cur.execute("SELECT id, name, port, web_port FROM servers WHERE tenant_id = %s ORDER BY name", (tenant_id,))
+        cur.execute("""
+            SELECT s.id, s.name, s.port, s.web_port, s.tenant_id, t.name as tenant_name 
+            FROM servers s
+            LEFT JOIN tenants t ON s.tenant_id = t.id
+            WHERE s.tenant_id = %s ORDER BY s.name
+        """, (tenant_id,))
     else:
-        cur.execute("SELECT id, name, port, web_port FROM servers ORDER BY name")
+        cur.execute("""
+            SELECT s.id, s.name, s.port, s.web_port, s.tenant_id, t.name as tenant_name 
+            FROM servers s
+            LEFT JOIN tenants t ON s.tenant_id = t.id
+            ORDER BY s.name
+        """)
     relays = cur.fetchall()
     conn.close()
 
@@ -112,7 +122,7 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
         docker_client = None
 
     for relay in relays:
-        rid, name, udp_port, web_port = relay
+        rid, name, udp_port, web_port, t_id, t_name = relay
         container_name = f"wpex-{name}"
 
         # Docker status
@@ -142,6 +152,7 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
 
         relay_details.append({
             "id": rid, "name": name, "status": status,
+            "tenant_id": t_id, "tenant_name": t_name or "Globale",
             "health": float(f"{health:.1f}"),
             "bytes_transferred": stats.get("total_bytes_transferred", 0) if stats else 0,
             "peers_count": len(stats.get("peers", {})) if stats and isinstance(stats.get("peers"), dict) else 0,
@@ -246,14 +257,28 @@ def get_topology_data(user=Depends(get_current_user)):
 
     # Nodes — relays
     if is_tenant_scoped:
-        cur.execute("SELECT id, name, port, web_port FROM servers WHERE tenant_id = %s ORDER BY name", (tenant_id,))
+        cur.execute("""
+            SELECT s.id, s.name, s.port, s.web_port, s.tenant_id, t.name as tenant_name 
+            FROM servers s
+            LEFT JOIN tenants t ON s.tenant_id = t.id
+            WHERE s.tenant_id = %s ORDER BY s.name
+        """, (tenant_id,))
     else:
-        cur.execute("SELECT id, name, port, web_port FROM servers ORDER BY name")
+        cur.execute("""
+            SELECT s.id, s.name, s.port, s.web_port, s.tenant_id, t.name as tenant_name 
+            FROM servers s
+            LEFT JOIN tenants t ON s.tenant_id = t.id
+            ORDER BY s.name
+        """)
     relay_nodes = []
     for r in cur.fetchall():
         relay_nodes.append({
             "id": f"relay-{r[0]}", "type": "relay",
-            "label": r[1], "data": {"port": r[2], "web_port": r[3]},
+            "label": r[1],
+            "data": {
+                "port": r[2], "web_port": r[3],
+                "tenant_id": r[4], "tenant": r[5] or "Globale"
+            },
         })
 
     # Nodes — keys (acting as sites)
