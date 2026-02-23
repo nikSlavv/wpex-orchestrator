@@ -82,7 +82,7 @@ export default function Dashboard() {
                                 <div className="kpi-sub">{kpi.relays_total - kpi.relays_active} inattivi</div>
                             </div>
                             <div className="kpi-card">
-                                <div className="kpi-label"><Key size={14} /> Keys Assignate</div>
+                                <div className="kpi-label"><Key size={16} /> KEYS ASSEGNATE</div>
                                 <div className="kpi-value blue">{kpi.keys_assigned}</div>
                                 <div className="kpi-sub">Wireguard Peers</div>
                             </div>

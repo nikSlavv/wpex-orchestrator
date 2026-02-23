@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import {
     Users, Plus, Trash2, RefreshCw, Settings, ChevronDown, ChevronRight,
-    MapPin, Link2, AlertTriangle
+    MapPin, Link2, AlertTriangle, Key
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
 
@@ -141,7 +141,7 @@ export default function TenantsPage() {
                                         <div style={{ textAlign: 'right' }}>
                                         </div>
                                         <div style={{ fontSize: '0.82rem' }}>
-                                            <MapPin size={12} style={{ marginRight: 4 }} /> {t.site_count} siti
+                                            <Key size={12} style={{ marginRight: 4 }} /> {t.site_count} chiavi
                                         </div>
                                         {isAdmin && (
                                             <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}>
@@ -170,14 +170,14 @@ export default function TenantsPage() {
                                         </div>
                                         <div className="kpi-grid" style={{ marginBottom: 16 }}>
                                             <div className="kpi-card">
-                                                <div className="kpi-label">Siti</div>
+                                                <div className="kpi-label">Chiavi</div>
                                                 <div className="kpi-value blue">{tenantDetail.usage?.sites_count || 0}</div>
                                             </div>
                                         </div>
 
-                                        {/* Sites */}
+                                        {/* Keys (Mapped as Sites backend-side) */}
                                         <div className="section-header">
-                                            <h4 className="section-title"><MapPin size={16} /> Siti ({tenantDetail.sites?.length || 0})</h4>
+                                            <h4 className="section-title"><Key size={16} /> Chiavi ({tenantDetail.sites?.length || 0})</h4>
                                         </div>
 
                                         {showSiteCreate === t.id && canManageSites && (
@@ -206,34 +206,22 @@ export default function TenantsPage() {
                                             <table className="data-table">
                                                 <thead>
                                                     <tr>
-                                                        <th style={{ width: '25%' }}>Nome</th>
-                                                        <th style={{ width: '20%' }}>Regione</th>
-                                                        <th style={{ width: '20%' }}>IP Pubblico</th>
-                                                        <th style={{ width: '20%' }}>Subnet</th>
-                                                        <th style={{ width: '15%' }}>Azioni</th>
+                                                        <th style={{ width: '40%' }}>Alias</th>
+                                                        <th style={{ width: '60%' }}>ID</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>
                                                     {tenantDetail.sites.map(s => (
                                                         <tr key={s.id}>
-                                                            <td style={{ fontWeight: 600 }}>{s.name}</td>
-                                                            <td>{s.region || '—'}</td>
-                                                            <td><code>{s.public_ip || '—'}</code></td>
-                                                            <td><code>{s.subnet || '—'}</code></td>
-                                                            <td>
-                                                                {canManageSites && (
-                                                                    <button className="btn btn-sm btn-danger" onClick={() => handleDeleteSite(t.id, s.id)}>
-                                                                        <Trash2 size={12} />
-                                                                    </button>
-                                                                )}
-                                                            </td>
+                                                            <td style={{ fontWeight: 600 }}>{s.alias}</td>
+                                                            <td><span className="badge">#{s.id}</span></td>
                                                         </tr>
                                                     ))}
                                                 </tbody>
                                             </table>
                                         ) : (
                                             <div className="empty-state" style={{ padding: 16 }}>
-                                                <p>Nessun site configurato</p>
+                                                <p>Nessuna chiave presente</p>
                                             </div>
                                         )}
                                     </div>

@@ -51,7 +51,7 @@ def list_tenants(user=Depends(get_current_user)):
         SELECT t.id, t.name, t.slug, t.max_bandwidth_mbps,
                t.sla_target, t.allowed_regions, t.preferred_relay_ids,
                t.api_key, t.is_active, t.created_at,
-               (SELECT COUNT(*) FROM sites WHERE tenant_id = t.id) as site_count
+               (SELECT COUNT(*) FROM access_keys WHERE tenant_id = t.id) as site_count
         FROM tenants t
     """
     params = []
@@ -121,9 +121,9 @@ def get_tenant(tenant_id: int, user=Depends(get_current_user)):
         conn.close()
         raise HTTPException(status_code=404, detail="Tenant non trovato")
 
-    # Get sites
-    cur.execute("SELECT id, name, region, public_ip, subnet, is_active FROM sites WHERE tenant_id = %s ORDER BY name", (tenant_id,))
-    sites = [{"id": s[0], "name": s[1], "region": s[2], "public_ip": s[3], "subnet": s[4], "is_active": s[5]} for s in cur.fetchall()]
+    # Get sites (keys mapping)
+    cur.execute("SELECT id, alias FROM access_keys WHERE tenant_id = %s ORDER BY alias", (tenant_id,))
+    sites = [{"id": s[0], "alias": s[1]} for s in cur.fetchall()]
 
     conn.close()
     return {
