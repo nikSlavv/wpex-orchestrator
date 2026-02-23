@@ -2,10 +2,11 @@ import { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { api } from '../api';
+import { useAuth } from '../AuthContext';
 import {
     Server, RefreshCw, Play, Square, ArrowUpRight,
     Activity, Cpu, HardDrive, Wifi, Terminal, Search,
-    RotateCw, Upload, ChevronLeft
+    RotateCw, Upload, ChevronLeft, Key
 } from 'lucide-react';
 
 function HealthRing({ value, size = 64 }) {
@@ -39,6 +40,12 @@ export default function RelayView() {
     const [diagResult, setDiagResult] = useState(null);
     const [diagLoading, setDiagLoading] = useState(false);
 
+    const { user } = useAuth();
+    const canMutate = !['viewer', 'executive'].includes(user?.role);
+    const [availableKeys, setAvailableKeys] = useState([]);
+    const [selectedKeyIds, setSelectedKeyIds] = useState([]);
+    const [updatingKeys, setUpdatingKeys] = useState(false);
+
     // Resolve relay ID from name or params
     const [relayId, setRelayId] = useState(id);
 
@@ -46,14 +53,23 @@ export default function RelayView() {
         const rid = parseInt(relayId);
         if (!rid) return;
         try {
-            const [h, c, s] = await Promise.all([
+            const [h, c, s, serversData, keysData] = await Promise.all([
                 api.getRelayHealth(rid),
                 api.getRelayContainer(rid),
                 api.getRelayStats(rid),
+                api.getServers().catch(() => ({ servers: [] })),
+                api.getKeys().catch(() => ({ keys: [] }))
             ]);
             setHealth(h);
             setContainer(c);
             setStats(s);
+
+            const foundRelay = serversData.servers?.find(r => r.id === rid);
+            if (foundRelay) {
+                setRelay(foundRelay);
+                setSelectedKeyIds(foundRelay.keys?.map(k => k.id) || []);
+            }
+            setAvailableKeys(keysData.keys || keysData || []);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
@@ -72,6 +88,31 @@ export default function RelayView() {
 
     const handleRestart = async () => {
         try { await api.restartRelay(parseInt(relayId)); loadData(); } catch (e) { alert(e.message); }
+    };
+
+    const toggleKey = async (keyId) => {
+        if (!canMutate || updatingKeys) return;
+        setUpdatingKeys(true);
+
+        const isAdding = !selectedKeyIds.includes(keyId);
+        const newKeys = isAdding
+            ? [...selectedKeyIds, keyId]
+            : selectedKeyIds.filter(id => id !== keyId);
+
+        // Optimistic update
+        setSelectedKeyIds(newKeys);
+
+        try {
+            await api.updateServerKeys(parseInt(relayId), newKeys);
+            // Optionally reload to fetch real status
+            loadData();
+        } catch (e) {
+            alert(e.message);
+            // Revert on error
+            setSelectedKeyIds(selectedKeyIds);
+        } finally {
+            setUpdatingKeys(false);
+        }
     };
 
     const handlePing = async () => {
@@ -236,6 +277,40 @@ export default function RelayView() {
                                 </div>
                             </div>
                         )}
+
+                        {/* Keys Management */}
+                        <div className="card">
+                            <div className="card-header">
+                                <h3 className="card-title"><Key size={18} /> Chiavi Autorizzate</h3>
+                            </div>
+
+                            {availableKeys.length === 0 ? (
+                                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nessuna chiave disponibile.</p>
+                            ) : (
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
+                                    {availableKeys.map(k => (
+                                        <div key={k.id} onClick={() => toggleKey(k.id)}
+                                            style={{
+                                                display: 'flex', alignItems: 'center', gap: 6,
+                                                padding: '6px 12px', borderRadius: 8,
+                                                cursor: (canMutate && !updatingKeys) ? 'pointer' : 'default',
+                                                opacity: updatingKeys ? 0.6 : 1,
+                                                fontSize: '0.84rem', fontWeight: 500, transition: 'all 0.2s',
+                                                background: selectedKeyIds.includes(k.id)
+                                                    ? 'rgba(124,106,239,0.2)' : 'rgba(255,255,255,0.04)',
+                                                border: `1px solid ${selectedKeyIds.includes(k.id)
+                                                    ? 'rgba(124,106,239,0.5)' : 'rgba(255,255,255,0.08)'}`,
+                                                color: selectedKeyIds.includes(k.id) ? '#9b8afb' : 'var(--text-secondary)',
+                                                userSelect: 'none',
+                                            }}>
+                                            <Key size={12} />
+                                            {k.alias || k.name || k.label || `Chiave #${k.id}`}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+
+                        </div>
                     </>
                 ) : tab === 'diagnostics' ? (
                     <div className="card">
