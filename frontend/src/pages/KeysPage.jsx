@@ -136,7 +136,12 @@ export default function KeysPage() {
                                 return (
                                     <table className="data-table">
                                         <thead>
-                                            <tr><th>ID</th><th>Alias</th><th>Chiave</th><th>Azioni</th></tr>
+                                            <tr>
+                                                <th style={{ width: '10%' }}>ID</th>
+                                                <th style={{ width: '25%' }}>Alias</th>
+                                                <th style={{ width: '50%' }}>Chiave</th>
+                                                <th style={{ width: '15%' }}>Azioni</th>
+                                            </tr>
                                         </thead>
                                         <tbody>
                                             {keys.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
@@ -162,7 +167,12 @@ export default function KeysPage() {
                                     <div style={{ background: 'var(--bg-card-alt)', borderRadius: 8, overflow: 'hidden' }}>
                                         <table className="data-table">
                                             <thead>
-                                                <tr><th>ID</th><th>Alias</th><th>Chiave</th><th>Azioni</th></tr>
+                                                <tr>
+                                                    <th style={{ width: '10%' }}>ID</th>
+                                                    <th style={{ width: '25%' }}>Alias</th>
+                                                    <th style={{ width: '50%' }}>Chiave</th>
+                                                    <th style={{ width: '15%' }}>Azioni</th>
+                                                </tr>
                                             </thead>
                                             <tbody>
                                                 {group.items.map(k => <KeyRow key={k.id} k={k} canMutate={canMutate} copyKey={copyKey} copiedKey={copiedKey} handleDelete={handleDelete} />)}
