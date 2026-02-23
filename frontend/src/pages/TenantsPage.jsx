@@ -195,7 +195,11 @@ export default function TenantsPage() {
                                             <table className="data-table">
                                                 <thead>
                                                     <tr>
-                                                        <th>Nome</th><th>Regione</th><th>IP</th><th>Subnet</th><th></th>
+                                                        <th style={{ width: '25%' }}>Nome</th>
+                                                        <th style={{ width: '20%' }}>Regione</th>
+                                                        <th style={{ width: '20%' }}>IP Pubblico</th>
+                                                        <th style={{ width: '20%' }}>Subnet</th>
+                                                        <th style={{ width: '15%' }}>Azioni</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody>

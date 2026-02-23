@@ -185,13 +185,13 @@ export default function SettingsPage() {
                             <table className="data-table">
                                 <thead>
                                     <tr>
-                                        <th>ID</th>
-                                        <th>Username</th>
-                                        <th>Ruolo</th>
-                                        <th>Stato</th>
-                                        <th>Tenant</th>
-                                        <th>Creato il</th>
-                                        <th>Azioni</th>
+                                        <th style={{ width: '5%' }}>ID</th>
+                                        <th style={{ width: '15%' }}>Username</th>
+                                        <th style={{ width: '10%' }}>Ruolo</th>
+                                        <th style={{ width: '10%' }}>Stato</th>
+                                        <th style={{ width: '20%' }}>Tenant</th>
+                                        <th style={{ width: '15%' }}>Creato il</th>
+                                        <th style={{ width: '25%' }}>Azioni</th>
                                     </tr>
                                 </thead>
                                 <tbody>
