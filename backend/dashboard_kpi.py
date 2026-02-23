@@ -89,17 +89,7 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
         cur.execute("SELECT COUNT(*) FROM tenants WHERE is_active = TRUE")
     tenants_active = cur.fetchone()[0]
 
-    # Tunnel counts
-    if is_tenant_scoped:
-        cur.execute("SELECT COUNT(*) FROM tunnels WHERE tenant_id = %s", (tenant_id,))
-        tunnels_total = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM tunnels WHERE status = 'active' AND tenant_id = %s", (tenant_id,))
-        tunnels_active = cur.fetchone()[0]
-    else:
-        cur.execute("SELECT COUNT(*) FROM tunnels")
-        tunnels_total = cur.fetchone()[0]
-        cur.execute("SELECT COUNT(*) FROM tunnels WHERE status = 'active'")
-        tunnels_active = cur.fetchone()[0]
+    # (Tunnels count removed)
 
     # Get relay details for health computation
     if is_tenant_scoped:
@@ -113,7 +103,6 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
     total_health = 0
     total_bytes = 0
     total_peers = 0
-    tunnels_degraded = 0
     relay_details = []
 
     import docker
@@ -151,9 +140,6 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
             if isinstance(peers, dict):
                 total_peers += len(peers)
 
-        if health < 70:
-            tunnels_degraded += 1
-
         relay_details.append({
             "id": rid, "name": name, "status": status,
             "health": float(f"{health:.1f}"),
@@ -167,9 +153,6 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
     return {
         "relays_active": relays_active,
         "relays_total": relays_total,
-        "tunnels_active": tunnels_active,
-        "tunnels_total": tunnels_total,
-        "tunnels_degraded": tunnels_degraded,
         "tenants_active": tenants_active,
         "bandwidth_aggregated_mb": bandwidth_mbps,
         "total_peers": total_peers,
@@ -245,28 +228,7 @@ def get_dashboard_alerts(user=Depends(get_current_user)):
                     "type": "low_handshake_rate",
                 })
 
-    # Tenant quota warnings
-    cur2 = get_db().cursor()
-    if is_tenant_scoped:
-        cur2.execute("""
-            SELECT t.name, t.max_tunnels,
-                   (SELECT COUNT(*) FROM tunnels WHERE tenant_id = t.id) as count
-            FROM tenants t WHERE t.is_active = TRUE AND t.id = %s
-        """, (tenant_id,))
-    else:
-        cur2.execute("""
-            SELECT t.name, t.max_tunnels,
-                   (SELECT COUNT(*) FROM tunnels WHERE tenant_id = t.id) as count
-            FROM tenants t WHERE t.is_active = TRUE
-        """)
-    for row in cur2.fetchall():
-        if row[2] >= row[1] * 0.8:
-            alerts.append({
-                "severity": "warning",
-                "tenant": row[0],
-                "message": f"Tenant {row[0]} al {round(row[2]/row[1]*100)}% della quota tunnel",
-                "type": "quota_warning",
-            })
+    # (Tenant quota for tunnels omitted)
 
     return {"alerts": alerts, "total": len(alerts),
             "critical": len([a for a in alerts if a["severity"] == "critical"]),
@@ -294,61 +256,56 @@ def get_topology_data(user=Depends(get_current_user)):
             "label": r[1], "data": {"port": r[2], "web_port": r[3]},
         })
 
-    # Nodes — sites
+    # Nodes — keys (acting as sites)
     if is_tenant_scoped:
         cur.execute("""
-            SELECT s.id, s.name, s.region, s.public_ip, t.name as tenant_name, t.id as tenant_id
-            FROM sites s
-            LEFT JOIN tenants t ON s.tenant_id = t.id
-            WHERE s.tenant_id = %s
-            ORDER BY s.name
+            SELECT k.id, k.alias, t.name as tenant_name, t.id as tenant_id
+            FROM access_keys k
+            LEFT JOIN tenants t ON k.tenant_id = t.id
+            WHERE k.tenant_id = %s
+            ORDER BY k.alias
         """, (tenant_id,))
     else:
         cur.execute("""
-            SELECT s.id, s.name, s.region, s.public_ip, t.name as tenant_name, t.id as tenant_id
-            FROM sites s
-            LEFT JOIN tenants t ON s.tenant_id = t.id
-            ORDER BY s.name
+            SELECT k.id, k.alias, t.name as tenant_name, t.id as tenant_id
+            FROM access_keys k
+            LEFT JOIN tenants t ON k.tenant_id = t.id
+            ORDER BY k.alias
         """)
-    site_nodes = []
-    for s in cur.fetchall():
-        site_nodes.append({
-            "id": f"site-{s[0]}", "type": "site",
-            "label": s[1], "data": {"region": s[2], "public_ip": s[3],
-                                     "tenant": s[4], "tenant_id": s[5]},
+    key_nodes = []
+    for k in cur.fetchall():
+        key_nodes.append({
+            "id": f"key-{k[0]}", "type": "site",
+            "label": k[1], "data": {"tenant": k[2], "tenant_id": k[3]},
         })
 
-    # Edges — tunnels
+    # Edges — key-to-relay links
     if is_tenant_scoped:
         cur.execute("""
-            SELECT t.id, t.site_a_id, t.site_b_id, t.relay_id, t.status,
-                   ten.name as tenant_name
-            FROM tunnels t
-            LEFT JOIN tenants ten ON t.tenant_id = ten.id
-            WHERE t.tenant_id = %s
+            SELECT skl.key_id, skl.server_id, ten.name as tenant_name
+            FROM server_keys_link skl
+            JOIN access_keys k ON skl.key_id = k.id
+            LEFT JOIN tenants ten ON k.tenant_id = ten.id
+            WHERE k.tenant_id = %s
         """, (tenant_id,))
     else:
         cur.execute("""
-            SELECT t.id, t.site_a_id, t.site_b_id, t.relay_id, t.status,
-                   ten.name as tenant_name
-            FROM tunnels t
-            LEFT JOIN tenants ten ON t.tenant_id = ten.id
+            SELECT skl.key_id, skl.server_id, ten.name as tenant_name
+            FROM server_keys_link skl
+            JOIN access_keys k ON skl.key_id = k.id
+            LEFT JOIN tenants ten ON k.tenant_id = ten.id
         """)
     edges = []
-    for t in cur.fetchall():
-        # Site A ↔ Relay
+    for link in cur.fetchall():
         edges.append({
-            "id": f"edge-{t[0]}-a", "source": f"site-{t[1]}", "target": f"relay-{t[3]}",
-            "tunnel_id": t[0], "status": t[4], "tenant": t[5],
-        })
-        # Relay ↔ Site B
-        edges.append({
-            "id": f"edge-{t[0]}-b", "source": f"relay-{t[3]}", "target": f"site-{t[2]}",
-            "tunnel_id": t[0], "status": t[4], "tenant": t[5],
+            "id": f"edge-k{link[0]}-s{link[1]}",
+            "source": f"key-{link[0]}",
+            "target": f"relay-{link[1]}",
+            "tenant": link[2]
         })
 
     conn.close()
     return {
-        "nodes": relay_nodes + site_nodes,
+        "nodes": relay_nodes + key_nodes,
         "edges": edges,
     }

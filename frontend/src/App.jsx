@@ -7,7 +7,6 @@ import NetworkView from './pages/NetworkView';
 import RelayView from './pages/RelayView';
 import TopologyMap from './pages/TopologyMap';
 import TenantsPage from './pages/TenantsPage';
-import TunnelList from './pages/TunnelList';
 import KeysPage from './pages/KeysPage';
 import ConfigManager from './pages/ConfigManager';
 import AuditLog from './pages/AuditLog';
@@ -39,7 +38,6 @@ export default function App() {
             <Route path="/server/:name" element={<ProtectedRoute><RelayView /></ProtectedRoute>} />
             <Route path="/topology" element={<ProtectedRoute><TopologyMap /></ProtectedRoute>} />
             <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
-            <Route path="/tunnels" element={<ProtectedRoute><TunnelList /></ProtectedRoute>} />
             <Route path="/keys" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />
             <Route path="/config" element={<ProtectedRoute><ConfigManager /></ProtectedRoute>} />
             <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />

@@ -12,7 +12,6 @@ const NAV_ITEMS = [
     { to: '/topology', icon: Map, label: 'Topology', roles: ['admin', 'engineer'] },
     { divider: true },
     { to: '/relays', icon: Server, label: 'Relays', roles: ['admin', 'engineer'] },
-    { to: '/tunnels', icon: Link2, label: 'Routing P2P', roles: ['admin', 'engineer'] },
     { to: '/tenants', icon: Users, label: 'Tenants', roles: ['admin'] },
     { to: '/keys', icon: Key, label: 'Chiavi', roles: ['admin', 'engineer'] },
     { divider: true },

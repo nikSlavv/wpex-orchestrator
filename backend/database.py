@@ -119,35 +119,6 @@ def init_db():
     """)
 
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS tunnels (
-            id SERIAL PRIMARY KEY,
-            tenant_id INT REFERENCES tenants(id) ON DELETE CASCADE,
-            site_a_id INT REFERENCES sites(id),
-            site_b_id INT REFERENCES sites(id),
-            relay_id INT REFERENCES servers(id),
-            status VARCHAR(20) DEFAULT 'pending',
-            config_json JSONB DEFAULT '{}',
-            config_version INT DEFAULT 1,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(site_a_id, site_b_id)
-        );
-    """)
-
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS relay_config_versions (
-            id SERIAL PRIMARY KEY,
-            relay_id INT REFERENCES servers(id) ON DELETE CASCADE,
-            version INT NOT NULL,
-            config_json JSONB NOT NULL,
-            diff_from_previous JSONB,
-            created_by INT REFERENCES users(id),
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(relay_id, version)
-        );
-    """)
-
-    cur.execute("""
         CREATE TABLE IF NOT EXISTS audit_log (
             id SERIAL PRIMARY KEY,
             user_id INT,
@@ -184,6 +155,11 @@ def migrate_db():
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';")
         # Access Keys tenant isolation
         cur.execute("ALTER TABLE access_keys ADD COLUMN IF NOT EXISTS tenant_id INT;")
+        
+        # Obsolete Tunnels removal
+        cur.execute("DROP TABLE IF EXISTS relay_config_versions CASCADE;")
+        cur.execute("DROP TABLE IF EXISTS tunnels CASCADE;")
+        
         conn.commit()
     except:
         pass

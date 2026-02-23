@@ -122,28 +122,6 @@ export const api = {
     getTenantUsage: (tenantId) =>
         request(`/api/tenants/${tenantId}/usage`),
 
-    // --- Tunnels ---
-    getTunnels: (params = {}) =>
-        request(`/api/tunnels?${new URLSearchParams(params)}`),
-
-    createTunnel: (data) =>
-        request('/api/tunnels', { method: 'POST', body: JSON.stringify(data) }),
-
-    getTunnel: (id) =>
-        request(`/api/tunnels/${id}`),
-
-    deleteTunnel: (id) =>
-        request(`/api/tunnels/${id}`, { method: 'DELETE' }),
-
-    updateTunnelConfig: (id, config_json) =>
-        request(`/api/tunnels/${id}/config`, { method: 'PUT', body: JSON.stringify({ config_json }) }),
-
-    getConfigHistory: (id) =>
-        request(`/api/tunnels/${id}/config/history`),
-
-    rollbackConfig: (id, version) =>
-        request(`/api/tunnels/${id}/config/rollback/${version}`, { method: 'POST' }),
-
     // --- Relay Enhanced ---
     getRelayStats: (id) =>
         request(`/api/relays/${id}/stats`),

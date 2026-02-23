@@ -16,7 +16,7 @@ export default function TenantsPage() {
     const [showCreate, setShowCreate] = useState(false);
     const [expanded, setExpanded] = useState(null);
     const [tenantDetail, setTenantDetail] = useState(null);
-    const [form, setForm] = useState({ name: '', slug: '', max_tunnels: 10, max_bandwidth_mbps: 100 });
+    const [form, setForm] = useState({ name: '', slug: '', max_bandwidth_mbps: 100 });
     const [siteForm, setSiteForm] = useState({ name: '', region: '', public_ip: '', subnet: '' });
     const [showSiteCreate, setShowSiteCreate] = useState(null);
 
@@ -34,7 +34,7 @@ export default function TenantsPage() {
         try {
             await api.createTenant(form);
             setShowCreate(false);
-            setForm({ name: '', slug: '', max_tunnels: 10, max_bandwidth_mbps: 100 });
+            setForm({ name: '', slug: '', max_bandwidth_mbps: 100 });
             loadData();
         } catch (e) { alert(e.message); }
     };
@@ -98,10 +98,6 @@ export default function TenantsPage() {
                         </div>
                         <div className="form-row" style={{ marginTop: 12 }}>
                             <div className="form-group">
-                                <label>Max Tunnel</label>
-                                <input className="input" type="number" value={form.max_tunnels} onChange={e => setForm({ ...form, max_tunnels: parseInt(e.target.value) })} />
-                            </div>
-                            <div className="form-group">
                                 <label>Max Bandwidth (Mbps)</label>
                                 <input className="input" type="number" value={form.max_bandwidth_mbps} onChange={e => setForm({ ...form, max_bandwidth_mbps: parseInt(e.target.value) })} />
                             </div>
@@ -127,13 +123,6 @@ export default function TenantsPage() {
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                         <div style={{ textAlign: 'right' }}>
-                                            <div style={{ fontSize: '0.82rem' }}>
-                                                <Link2 size={12} style={{ marginRight: 4 }} /> {t.tunnel_count}/{t.max_tunnels} tunnel
-                                            </div>
-                                            <div className="progress-bar" style={{ width: 80, marginTop: 4 }}>
-                                                <div className={`progress-fill ${t.tunnel_usage_pct >= 80 ? 'red' : t.tunnel_usage_pct >= 50 ? 'amber' : 'green'}`}
-                                                    style={{ width: `${t.tunnel_usage_pct}%` }} />
-                                            </div>
                                         </div>
                                         <div style={{ fontSize: '0.82rem' }}>
                                             <MapPin size={12} style={{ marginRight: 4 }} /> {t.site_count} siti
@@ -164,14 +153,6 @@ export default function TenantsPage() {
                                             <h4 className="section-title"><AlertTriangle size={16} /> Utilizzo Risorse</h4>
                                         </div>
                                         <div className="kpi-grid" style={{ marginBottom: 16 }}>
-                                            <div className="kpi-card">
-                                                <div className="kpi-label">Tunnel</div>
-                                                <div className="kpi-value">{tenantDetail.usage?.tunnels_used}/{tenantDetail.usage?.tunnels_limit}</div>
-                                                <div className="progress-bar" style={{ marginTop: 8 }}>
-                                                    <div className={`progress-fill ${tenantDetail.usage?.tunnels_pct >= 80 ? 'red' : 'green'}`}
-                                                        style={{ width: `${tenantDetail.usage?.tunnels_pct || 0}%` }} />
-                                                </div>
-                                            </div>
                                             <div className="kpi-card">
                                                 <div className="kpi-label">Siti</div>
                                                 <div className="kpi-value blue">{tenantDetail.usage?.sites_count || 0}</div>
