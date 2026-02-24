@@ -666,7 +666,7 @@ input[type="number"] {
 
   .main-content {
     margin-left: 0 !important;
-    padding: 20px;
+    padding: 64px 20px 20px;
   }
 
   .mobile-menu-btn {
@@ -683,6 +683,19 @@ input[type="number"] {
 
   .grid-2 {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .modal {
+    min-width: 0;
+    width: 100%;
+    margin: 16px;
+    padding: 20px;
+  }
+  
+  .login-card {
+    padding: 24px 16px;
   }
 }
 

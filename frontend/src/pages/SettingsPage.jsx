@@ -182,136 +182,138 @@ export default function SettingsPage() {
                                 <div className="spinner" />
                             </div>
                         ) : (
-                            <table className="data-table">
-                                <thead>
-                                    <tr>
-                                        <th style={{ width: '5%' }}>ID</th>
-                                        <th style={{ width: '15%' }}>Username</th>
-                                        <th style={{ width: '10%' }}>Ruolo</th>
-                                        <th style={{ width: '10%' }}>Stato</th>
-                                        <th style={{ width: '15%' }}>Tenant</th>
-                                        <th style={{ width: '10%' }}>Creato il</th>
-                                        <th style={{ width: '35%' }}>Azioni</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {users.map(u => (
-                                        <tr key={u.id}>
-                                            <td>#{u.id}</td>
-                                            <td style={{ fontWeight: 600 }}>{u.username}</td>
-                                            <td>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    padding: '3px 10px',
-                                                    borderRadius: 20,
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: 600,
-                                                    background: (roleColors[u.role] || roleColors.engineer).bg,
-                                                    color: (roleColors[u.role] || roleColors.engineer).color,
-                                                    border: `1px solid ${(roleColors[u.role] || roleColors.engineer).border}`,
-                                                }}>
-                                                    {u.role || 'engineer'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                <span style={{
-                                                    display: 'inline-block',
-                                                    padding: '3px 10px',
-                                                    borderRadius: 20,
-                                                    fontSize: '0.8rem',
-                                                    fontWeight: 600,
-                                                    background: (statusColors[u.status] || statusColors.pending).bg,
-                                                    color: (statusColors[u.status] || statusColors.pending).color,
-                                                    border: `1px solid ${(statusColors[u.status] || statusColors.pending).border}`,
-                                                }}>
-                                                    {u.status || 'pending'}
-                                                </span>
-                                            </td>
-                                            <td>
-                                                {u.tenant_id
-                                                    ? tenants.find(t => t.id === u.tenant_id)?.name || `Tenant #${u.tenant_id}`
-                                                    : '—'
-                                                }
-                                            </td>
-                                            <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
-                                                {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
-                                            </td>
-                                            <td>
-                                                {user?.role === 'admin' && u.id !== user.id ? (
-                                                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                                                        <select
-                                                            className="input"
-                                                            value={u.role || 'engineer'}
-                                                            onChange={e => handleRoleChange(u.id, e.target.value)}
-                                                            disabled={saving === u.id}
-                                                            style={{ width: 130, padding: '4px 8px', fontSize: '0.82rem' }}
-                                                        >
-                                                            {user?.role === 'admin' && <option value="admin">Admin</option>}
-                                                            {user?.role === 'admin' && <option value="executive">Executive</option>}
-                                                            <option value="engineer">Engineer</option>
-                                                            <option value="viewer">Viewer</option>
-                                                        </select>
-                                                        {u.status === 'pending' ? (
-                                                            <button
-                                                                className="btn btn-sm btn-success"
-                                                                onClick={() => handleStatusChange(u.id, 'active')}
-                                                                disabled={saving === u.id}
-                                                                style={{ padding: '4px 8px', fontSize: '0.75rem' }}
-                                                            >
-                                                                Approva
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                className={`btn btn-sm ${u.status === 'disabled' ? 'btn-secondary' : 'btn-danger'}`}
-                                                                onClick={() => handleStatusChange(u.id, u.status === 'disabled' ? 'active' : 'disabled')}
-                                                                disabled={saving === u.id}
-                                                                style={{ padding: '4px 8px', fontSize: '0.75rem', width: 80 }}
-                                                            >
-                                                                {u.status === 'disabled' ? 'Attiva' : 'Disabilita'}
-                                                            </button>
-                                                        )}
-                                                        <select
-                                                            className="input"
-                                                            value={u.tenant_id || ''}
-                                                            onChange={e => handleTenantChange(u.id, e.target.value)}
-                                                            disabled={saving === u.id}
-                                                            style={{ width: 140, padding: '4px 8px', fontSize: '0.82rem' }}
-                                                        >
-                                                            <option value="">Nessun Tenant</option>
-                                                            {tenants.map(t => (
-                                                                <option key={t.id} value={t.id}>{t.name}</option>
-                                                            ))}
-                                                        </select>
-                                                        {user?.role === 'admin' && (
-                                                            <button
-                                                                className="btn btn-sm btn-danger"
-                                                                onClick={() => handleDeleteUser(u.id, u.username)}
-                                                                disabled={saving === u.id}
-                                                                title="Elimina Utente"
-                                                                style={{ padding: '4px 8px' }}
-                                                            >
-                                                                <Trash2 size={14} />
-                                                            </button>
-                                                        )}
-                                                        {saving === u.id && <div className="spinner" style={{ width: 16, height: 16 }} />}
-                                                    </div>
-                                                ) : (
-                                                    <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-                                                        {u.id === user?.id ? '(Tu)' : '—'}
-                                                    </span>
-                                                )}
-                                            </td>
-                                        </tr>
-                                    ))}
-                                    {users.length === 0 && (
+                            <div className="table-responsive">
+                                <table className="data-table">
+                                    <thead>
                                         <tr>
-                                            <td colSpan="6" style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
-                                                Nessun utente trovato
-                                            </td>
+                                            <th style={{ width: '5%' }}>ID</th>
+                                            <th style={{ width: '15%' }}>Username</th>
+                                            <th style={{ width: '10%' }}>Ruolo</th>
+                                            <th style={{ width: '10%' }}>Stato</th>
+                                            <th style={{ width: '15%' }}>Tenant</th>
+                                            <th style={{ width: '10%' }}>Creato il</th>
+                                            <th style={{ width: '35%' }}>Azioni</th>
                                         </tr>
-                                    )}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {users.map(u => (
+                                            <tr key={u.id}>
+                                                <td>#{u.id}</td>
+                                                <td style={{ fontWeight: 600 }}>{u.username}</td>
+                                                <td>
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        padding: '3px 10px',
+                                                        borderRadius: 20,
+                                                        fontSize: '0.8rem',
+                                                        fontWeight: 600,
+                                                        background: (roleColors[u.role] || roleColors.engineer).bg,
+                                                        color: (roleColors[u.role] || roleColors.engineer).color,
+                                                        border: `1px solid ${(roleColors[u.role] || roleColors.engineer).border}`,
+                                                    }}>
+                                                        {u.role || 'engineer'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span style={{
+                                                        display: 'inline-block',
+                                                        padding: '3px 10px',
+                                                        borderRadius: 20,
+                                                        fontSize: '0.8rem',
+                                                        fontWeight: 600,
+                                                        background: (statusColors[u.status] || statusColors.pending).bg,
+                                                        color: (statusColors[u.status] || statusColors.pending).color,
+                                                        border: `1px solid ${(statusColors[u.status] || statusColors.pending).border}`,
+                                                    }}>
+                                                        {u.status || 'pending'}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    {u.tenant_id
+                                                        ? tenants.find(t => t.id === u.tenant_id)?.name || `Tenant #${u.tenant_id}`
+                                                        : '—'
+                                                    }
+                                                </td>
+                                                <td style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                                                    {u.created_at ? new Date(u.created_at).toLocaleDateString() : '—'}
+                                                </td>
+                                                <td>
+                                                    {user?.role === 'admin' && u.id !== user.id ? (
+                                                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                                                            <select
+                                                                className="input"
+                                                                value={u.role || 'engineer'}
+                                                                onChange={e => handleRoleChange(u.id, e.target.value)}
+                                                                disabled={saving === u.id}
+                                                                style={{ width: 130, padding: '4px 8px', fontSize: '0.82rem' }}
+                                                            >
+                                                                {user?.role === 'admin' && <option value="admin">Admin</option>}
+                                                                {user?.role === 'admin' && <option value="executive">Executive</option>}
+                                                                <option value="engineer">Engineer</option>
+                                                                <option value="viewer">Viewer</option>
+                                                            </select>
+                                                            {u.status === 'pending' ? (
+                                                                <button
+                                                                    className="btn btn-sm btn-success"
+                                                                    onClick={() => handleStatusChange(u.id, 'active')}
+                                                                    disabled={saving === u.id}
+                                                                    style={{ padding: '4px 8px', fontSize: '0.75rem' }}
+                                                                >
+                                                                    Approva
+                                                                </button>
+                                                            ) : (
+                                                                <button
+                                                                    className={`btn btn-sm ${u.status === 'disabled' ? 'btn-secondary' : 'btn-danger'}`}
+                                                                    onClick={() => handleStatusChange(u.id, u.status === 'disabled' ? 'active' : 'disabled')}
+                                                                    disabled={saving === u.id}
+                                                                    style={{ padding: '4px 8px', fontSize: '0.75rem', width: 80 }}
+                                                                >
+                                                                    {u.status === 'disabled' ? 'Attiva' : 'Disabilita'}
+                                                                </button>
+                                                            )}
+                                                            <select
+                                                                className="input"
+                                                                value={u.tenant_id || ''}
+                                                                onChange={e => handleTenantChange(u.id, e.target.value)}
+                                                                disabled={saving === u.id}
+                                                                style={{ width: 140, padding: '4px 8px', fontSize: '0.82rem' }}
+                                                            >
+                                                                <option value="">Nessun Tenant</option>
+                                                                {tenants.map(t => (
+                                                                    <option key={t.id} value={t.id}>{t.name}</option>
+                                                                ))}
+                                                            </select>
+                                                            {user?.role === 'admin' && (
+                                                                <button
+                                                                    className="btn btn-sm btn-danger"
+                                                                    onClick={() => handleDeleteUser(u.id, u.username)}
+                                                                    disabled={saving === u.id}
+                                                                    title="Elimina Utente"
+                                                                    style={{ padding: '4px 8px' }}
+                                                                >
+                                                                    <Trash2 size={14} />
+                                                                </button>
+                                                            )}
+                                                            {saving === u.id && <div className="spinner" style={{ width: 16, height: 16 }} />}
+                                                        </div>
+                                                    ) : (
+                                                        <span style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                                                            {u.id === user?.id ? '(Tu)' : '—'}
+                                                        </span>
+                                                    )}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {users.length === 0 && (
+                                            <tr>
+                                                <td colSpan="6" style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)' }}>
+                                                    Nessun utente trovato
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
                         )}
                     </div>
                 )}
