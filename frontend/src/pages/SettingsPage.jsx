@@ -38,7 +38,13 @@ export default function SettingsPage() {
         setSuccess('');
         try {
             await api.updateUserRole(userId, newRole);
-            setUsers(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u));
+            setUsers(prev => prev.map(u => {
+                if (u.id === userId) {
+                    const isGlobalRole = newRole === 'admin' || newRole === 'executive';
+                    return { ...u, role: newRole, tenant_id: isGlobalRole ? null : u.tenant_id };
+                }
+                return u;
+            }));
             setSuccess(`Ruolo aggiornato per utente #${userId}`);
             setTimeout(() => setSuccess(''), 3000);
         } catch (err) {

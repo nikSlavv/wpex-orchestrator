@@ -37,8 +37,8 @@ export function AuthProvider({ children }) {
         return data;
     };
 
-    const register = async (username, password, tenant_id) => {
-        return await api.register(username, password, tenant_id);
+    const register = async (username, password, tenant_id, new_tenant_name, new_tenant_slug) => {
+        return await api.register(username, password, tenant_id, new_tenant_name, new_tenant_slug);
     };
 
     const logout = async () => {

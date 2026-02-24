@@ -30,6 +30,7 @@ class UpdateTenantRequest(BaseModel):
     sla_target: Optional[float] = None
     allowed_regions: Optional[List[str]] = None
     preferred_relay_ids: Optional[List[int]] = None
+    status: Optional[str] = None
     is_active: Optional[bool] = None
 
 class CreateSiteRequest(BaseModel):
@@ -51,7 +52,7 @@ def list_tenants(user=Depends(get_current_user)):
     query = """
         SELECT t.id, t.name, t.slug, t.max_bandwidth_mbps,
                t.sla_target, t.allowed_regions, t.preferred_relay_ids,
-               t.api_key, t.is_active, t.created_at,
+               t.api_key, t.is_active, t.status, t.created_at,
                (SELECT COUNT(*) FROM access_keys WHERE tenant_id = t.id) as site_count
         FROM tenants t
     """
@@ -70,9 +71,9 @@ def list_tenants(user=Depends(get_current_user)):
             "max_bandwidth_mbps": row[3],
             "sla_target": float(row[4]), "allowed_regions": row[5] or [],
             "preferred_relay_ids": row[6] or [],
-            "api_key": row[7], "is_active": row[8],
-            "created_at": row[9].isoformat() if row[9] else None,
-            "site_count": row[10],
+            "api_key": row[7], "is_active": row[8], "status": row[9],
+            "created_at": row[10].isoformat() if row[10] else None,
+            "site_count": row[11],
         })
     conn.close()
     return {"tenants": tenants}
@@ -123,7 +124,7 @@ def get_tenant(tenant_id: int, user=Depends(get_current_user)):
     cur.execute("""
         SELECT id, name, slug, max_bandwidth_mbps,
                sla_target, allowed_regions, preferred_relay_ids,
-               api_key, billing_integration_id, is_active, created_at, updated_at
+               api_key, billing_integration_id, is_active, status, created_at, updated_at
         FROM tenants WHERE id = %s
     """, (tenant_id,))
     row = cur.fetchone()
@@ -142,9 +143,9 @@ def get_tenant(tenant_id: int, user=Depends(get_current_user)):
         "sla_target": float(row[4]), "allowed_regions": row[5] or [],
         "preferred_relay_ids": row[6] or [],
         "api_key": row[7], "billing_integration_id": row[8],
-        "is_active": row[9],
-        "created_at": row[10].isoformat() if row[10] else None,
-        "updated_at": row[11].isoformat() if row[11] else None,
+        "is_active": row[9], "status": row[10],
+        "created_at": row[11].isoformat() if row[11] else None,
+        "updated_at": row[12].isoformat() if row[12] else None,
         "sites": sites,
         "usage": {
             "sites_count": len(sites),
@@ -180,7 +181,18 @@ def update_tenant(tenant_id: int, body: UpdateTenantRequest, user=Depends(get_cu
     if body.preferred_relay_ids is not None:
         updates.append("preferred_relay_ids = %s")
         values.append(body.preferred_relay_ids)
-    if body.is_active is not None:
+    if body.status is not None:
+        if body.status not in ('active', 'pending', 'disabled'):
+            conn.close()
+            raise HTTPException(status_code=400, detail="Status non valido")
+        updates.append("status = %s")
+        values.append(body.status)
+        # If activated, also set is_active = TRUE and approve the pending admin
+        if body.status == 'active':
+            updates.append("is_active = TRUE")
+            # Automatically approve the user who requested this tenant
+            cur.execute("UPDATE users SET status = 'active' WHERE tenant_id = %s AND status = 'pending' AND role = 'engineer'", (tenant_id,))
+    elif body.is_active is not None:
         updates.append("is_active = %s")
         values.append(body.is_active)
 
