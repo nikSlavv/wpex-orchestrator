@@ -11,6 +11,7 @@ import KeysPage from './pages/KeysPage';
 import AuditLog from './pages/AuditLog';
 import SettingsPage from './pages/SettingsPage';
 import PendingApprovalPage from './pages/PendingApprovalPage';
+import ZabbixMonitor from './pages/ZabbixMonitor';
 
 function ProtectedRoute({ children }) {
     const { user, loading } = useAuth();
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
             <Route path="/keys" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />
             <Route path="/audit" element={<ProtectedRoute><AuditLog /></ProtectedRoute>} />
+            <Route path="/zabbix" element={<ProtectedRoute><ZabbixMonitor /></ProtectedRoute>} />
             <Route path="/settings" element={<ProtectedRoute><SettingsPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" />} />
         </Routes>

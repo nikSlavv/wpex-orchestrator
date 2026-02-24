@@ -14,6 +14,7 @@ const NAV_ITEMS = [
     { to: '/tenants', icon: Users, label: 'Tenants', roles: ['admin'] },
     { to: '/keys', icon: Key, label: 'Chiavi', roles: ['admin', 'engineer'] },
     { divider: true },
+    { to: '/zabbix', icon: Activity, label: 'Zabbix Monitor', roles: ['admin', 'engineer'] },
     { to: '/audit', icon: FileText, label: 'Audit Log', roles: ['admin'] },
     { to: '/settings', icon: Shield, label: 'Settings', roles: ['admin', 'engineer'] },
 ];

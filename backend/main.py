@@ -12,7 +12,10 @@ from keys import router as keys_router
 from tenants import router as tenants_router
 from dashboard_kpi import router as dashboard_router
 from relay_proxy import router as relay_proxy_router
+
 from audit import router as audit_router
+from zabbix_api import router as zabbix_router
+from zabbix_traffic import router as zabbix_traffic_router
 
 app = FastAPI(title="WPEX Orchestrator SaaS API", version="3.0")
 
@@ -32,7 +35,10 @@ app.include_router(keys_router)
 app.include_router(tenants_router)
 app.include_router(dashboard_router)
 app.include_router(relay_proxy_router)
+
 app.include_router(audit_router)
+app.include_router(zabbix_router)
+app.include_router(zabbix_traffic_router)
 
 
 @app.on_event("startup")
