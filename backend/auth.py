@@ -28,7 +28,9 @@ class LoginRequest(BaseModel):
 class RegisterRequest(BaseModel):
     username: str
     password: str
-    tenant_id: int
+    tenant_id: int | None = None
+    new_tenant_name: str | None = None
+    new_tenant_slug: str | None = None
 
 
 # --- JWT Helpers ---
@@ -132,16 +134,41 @@ def register(body: RegisterRequest):
     conn = get_db()
     try:
         cur = conn.cursor()
-        # Verify tenant exists
-        cur.execute("SELECT id FROM tenants WHERE id = %s AND is_active = TRUE", (body.tenant_id,))
-        if not cur.fetchone():
-            raise HTTPException(status_code=400, detail="Organizzazione non valida o inattiva")
         
-        # Insert user as pending with viewer role
-        cur.execute(
-            "INSERT INTO users (username, password_hash, status, role, tenant_id) VALUES (%s, crypt(%s, gen_salt('bf')), 'pending', 'viewer', %s);",
-            (body.username, body.password, body.tenant_id),
-        )
+        target_tenant_id = body.tenant_id
+        
+        if target_tenant_id is None:
+            # New organization request
+            if not body.new_tenant_name or not body.new_tenant_slug:
+                raise HTTPException(status_code=400, detail="Fornire un tenant esistente o i dati per una nuova organizzazione")
+            
+            # Create a pending tenant
+            from database import generate_api_key
+            api_key = generate_api_key()
+            slug = body.new_tenant_slug.lower().replace(" ", "-")
+            cur.execute("""
+                INSERT INTO tenants (name, slug, api_key, status, is_active)
+                VALUES (%s, %s, %s, 'pending', FALSE)
+                RETURNING id;
+            """, (body.new_tenant_name, slug, api_key))
+            target_tenant_id = cur.fetchone()[0]
+            
+            # The user becomes the first engineer/admin of this pending tenant
+            cur.execute(
+                "INSERT INTO users (username, password_hash, status, role, tenant_id) VALUES (%s, crypt(%s, gen_salt('bf')), 'pending', 'engineer', %s);",
+                (body.username, body.password, target_tenant_id),
+            )
+        else:
+            # Join existing organization
+            cur.execute("SELECT id FROM tenants WHERE id = %s AND status = 'active' AND is_active = TRUE", (target_tenant_id,))
+            if not cur.fetchone():
+                raise HTTPException(status_code=400, detail="Organizzazione non valida, inattiva o non ancora approvata")
+            
+            # Insert user as pending with viewer role
+            cur.execute(
+                "INSERT INTO users (username, password_hash, status, role, tenant_id) VALUES (%s, crypt(%s, gen_salt('bf')), 'pending', 'viewer', %s);",
+                (body.username, body.password, target_tenant_id),
+            )
         conn.commit()
         conn.close()
         return {"message": "Registrazione completata. Il tuo account è in attesa di approvazione da parte della tua organizzazione."}
@@ -301,7 +328,7 @@ def list_public_tenants():
     """Publicly accessible list of tenants for registration."""
     conn = get_db()
     cur = conn.cursor()
-    cur.execute("SELECT id, name FROM tenants WHERE is_active = TRUE ORDER BY name")
+    cur.execute("SELECT id, name FROM tenants WHERE status = 'active' AND is_active = TRUE ORDER BY name")
     rows = cur.fetchall()
     conn.close()
     return {"tenants": [{"id": r[0], "name": r[1]} for r in rows]}

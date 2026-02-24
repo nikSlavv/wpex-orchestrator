@@ -21,6 +21,9 @@ export default function LoginPage() {
     const [regPass, setRegPass] = useState('');
     const [regConfirm, setRegConfirm] = useState('');
     const [regTenant, setRegTenant] = useState('');
+    const [isNewOrg, setIsNewOrg] = useState(false);
+    const [regNewTenantName, setRegNewTenantName] = useState('');
+    const [regNewTenantSlug, setRegNewTenantSlug] = useState('');
     const [tenants, setTenants] = useState([]);
 
     useEffect(() => {
@@ -58,12 +61,20 @@ export default function LoginPage() {
         e.preventDefault();
         setError('');
         setSuccess('');
-        if (!regUser || !regPass || !regTenant) return setError('Compila tutti i campi');
+        if (!regUser || !regPass) return setError('Compila username e password');
+        if (!isNewOrg && !regTenant) return setError('Seleziona un\'organizzazione');
+        if (isNewOrg && (!regNewTenantName || !regNewTenantSlug)) return setError('Specifica il nome e lo slug per la nuova organizzazione');
         if (regPass !== regConfirm) return setError('Le password non coincidono');
         setLoading(true);
         try {
-            await register(regUser, regPass, parseInt(regTenant));
-            setSuccess('Registrazione completata! Il tuo account è in attesa di approvazione da parte della tua organizzazione.');
+            await register(
+                regUser,
+                regPass,
+                isNewOrg ? null : parseInt(regTenant),
+                isNewOrg ? regNewTenantName : null,
+                isNewOrg ? regNewTenantSlug : null
+            );
+            setSuccess('Registrazione completata! Il tuo account (e la tua organizzazione se richiesta) è in attesa di approvazione.');
             setTab('login');
             setLoginUser(regUser);
         } catch (err) {
@@ -110,23 +121,66 @@ export default function LoginPage() {
                             <label>Username</label>
                             <input className="input" value={regUser} onChange={e => setRegUser(e.target.value)} placeholder="Scegli un username" autoFocus />
                         </div>
-                        <div className="form-group">
-                            <label>Scegli la tua organizzazione</label>
-                            <div style={{ position: 'relative' }}>
-                                <select
-                                    className="input"
-                                    value={regTenant}
-                                    onChange={e => setRegTenant(e.target.value)}
-                                    style={{ paddingLeft: 38 }}
-                                >
-                                    <option value="" disabled>Seleziona un tenant...</option>
-                                    {tenants.map(t => (
-                                        <option key={t.id} value={t.id}>{t.name}</option>
-                                    ))}
-                                </select>
-                                <Users size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
-                            </div>
+
+                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
+                            <input
+                                type="checkbox"
+                                id="isNewOrg"
+                                checked={isNewOrg}
+                                onChange={(e) => {
+                                    setIsNewOrg(e.target.checked);
+                                    if (e.target.checked) setRegTenant('');
+                                }}
+                            />
+                            <label htmlFor="isNewOrg" style={{ margin: 0, cursor: 'pointer', fontSize: '0.9rem' }}>
+                                Vuoi registrare una nuova organizzazione?
+                            </label>
                         </div>
+
+                        {!isNewOrg ? (
+                            <div className="form-group">
+                                <label>Scegli un'organizzazione esistente</label>
+                                <div style={{ position: 'relative' }}>
+                                    <select
+                                        className="input"
+                                        value={regTenant}
+                                        onChange={e => setRegTenant(e.target.value)}
+                                        style={{ paddingLeft: 38 }}
+                                    >
+                                        <option value="" disabled>Seleziona un tenant...</option>
+                                        {tenants.map(t => (
+                                            <option key={t.id} value={t.id}>{t.name}</option>
+                                        ))}
+                                    </select>
+                                    <Users size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+                                </div>
+                            </div>
+                        ) : (
+                            <div style={{ display: 'flex', gap: 12 }}>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label>Nome Azienda</label>
+                                    <input
+                                        className="input"
+                                        value={regNewTenantName}
+                                        onChange={e => {
+                                            setRegNewTenantName(e.target.value);
+                                            setRegNewTenantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''));
+                                        }}
+                                        placeholder="Nome"
+                                    />
+                                </div>
+                                <div className="form-group" style={{ flex: 1 }}>
+                                    <label>Slug Azienda</label>
+                                    <input
+                                        className="input"
+                                        value={regNewTenantSlug}
+                                        onChange={e => setRegNewTenantSlug(e.target.value)}
+                                        placeholder="slug-azienda"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
                         <div className="form-group">
                             <label>Password</label>
                             <input className="input" type="password" value={regPass} onChange={e => setRegPass(e.target.value)} placeholder="Scegli una password" />

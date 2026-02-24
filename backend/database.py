@@ -86,7 +86,6 @@ def init_db():
         );
     """)
 
-    # ── SaaS Multi-tenant tables ─────────────────────────
     cur.execute("""
         CREATE TABLE IF NOT EXISTS tenants (
             id SERIAL PRIMARY KEY,
@@ -99,6 +98,7 @@ def init_db():
             preferred_relay_ids INT[],
             api_key VARCHAR(100) UNIQUE,
             billing_integration_id VARCHAR(100),
+            status VARCHAR(20) DEFAULT 'active',
             is_active BOOLEAN DEFAULT TRUE,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -155,6 +155,9 @@ def migrate_db():
         cur.execute("ALTER TABLE servers ADD COLUMN IF NOT EXISTS description TEXT DEFAULT '';")
         # Access Keys tenant isolation
         cur.execute("ALTER TABLE access_keys ADD COLUMN IF NOT EXISTS tenant_id INT;")
+
+        # Tenant registration status
+        cur.execute("ALTER TABLE tenants ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'active';")
         
         # Obsolete Tunnels removal
         cur.execute("DROP TABLE IF EXISTS relay_config_versions CASCADE;")

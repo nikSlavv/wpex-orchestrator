@@ -44,6 +44,11 @@ export default function TenantsPage() {
         try { await api.deleteTenant(id); loadData(); } catch (e) { alert(e.message); }
     };
 
+    const handleApprove = async (id) => {
+        if (!confirm('Approvare questo tenant e attivarlo?')) return;
+        try { await api.updateTenantStatus(id, 'active'); loadData(); } catch (e) { alert(e.message); }
+    };
+
     const handleExpand = async (id) => {
         if (expanded === id) { setExpanded(null); return; }
         try {
@@ -135,7 +140,8 @@ export default function TenantsPage() {
                                         ) : (
                                             isAdmin && <button className="btn btn-sm" style={{ padding: '2px 8px', fontSize: '0.75rem' }} onClick={(e) => { e.stopPropagation(); handleSetSlug(t.id, t.name); }}>+ Aggiungi Slug</button>
                                         )}
-                                        {!t.is_active && <span className="badge" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--accent-red)' }}>Inattivo</span>}
+                                        {t.status === 'pending' && <span className="badge" style={{ background: 'rgba(234,179,8,0.12)', color: 'var(--accent-yellow)' }}>In Attesa</span>}
+                                        {t.status !== 'pending' && !t.is_active && <span className="badge" style={{ background: 'rgba(248,113,113,0.12)', color: 'var(--accent-red)' }}>Inattivo</span>}
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                                         <div style={{ textAlign: 'right' }}>
@@ -143,6 +149,11 @@ export default function TenantsPage() {
                                         <div style={{ fontSize: '0.82rem' }}>
                                             <Key size={12} style={{ marginRight: 4 }} /> {t.site_count} chiavi
                                         </div>
+                                        {isAdmin && t.status === 'pending' && (
+                                            <button className="btn btn-sm btn-primary" onClick={(e) => { e.stopPropagation(); handleApprove(t.id); }}>
+                                                Approva
+                                            </button>
+                                        )}
                                         {isAdmin && (
                                             <button className="btn btn-sm btn-danger" onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}>
                                                 <Trash2 size={12} />
