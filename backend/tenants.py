@@ -187,9 +187,11 @@ def update_tenant(tenant_id: int, body: UpdateTenantRequest, user=Depends(get_cu
             raise HTTPException(status_code=400, detail="Status non valido")
         updates.append("status = %s")
         values.append(body.status)
-        # If activated, also set is_active = TRUE
+        # If activated, also set is_active = TRUE and approve the pending admin
         if body.status == 'active':
             updates.append("is_active = TRUE")
+            # Automatically approve the user who requested this tenant
+            cur.execute("UPDATE users SET status = 'active' WHERE tenant_id = %s AND status = 'pending' AND role = 'engineer'", (tenant_id,))
     elif body.is_active is not None:
         updates.append("is_active = %s")
         values.append(body.is_active)

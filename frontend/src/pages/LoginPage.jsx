@@ -7,7 +7,7 @@ import { Lock, ArrowLeft, Users } from 'lucide-react';
 export default function LoginPage() {
     const { login, register } = useAuth();
     const navigate = useNavigate();
-    const [tab, setTab] = useState('login');
+    const [tab, setTab] = useState('login'); // 'login' | 'register' | 'register_org'
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
@@ -18,10 +18,8 @@ export default function LoginPage() {
 
     // Register form
     const [regUser, setRegUser] = useState('');
-    const [regPass, setRegPass] = useState('');
     const [regConfirm, setRegConfirm] = useState('');
     const [regTenant, setRegTenant] = useState('');
-    const [isNewOrg, setIsNewOrg] = useState(false);
     const [regNewTenantName, setRegNewTenantName] = useState('');
     const [regNewTenantSlug, setRegNewTenantSlug] = useState('');
     const [tenants, setTenants] = useState([]);
@@ -61,6 +59,7 @@ export default function LoginPage() {
         e.preventDefault();
         setError('');
         setSuccess('');
+        const isNewOrg = tab === 'register_org';
         if (!regUser || !regPass) return setError('Compila username e password');
         if (!isNewOrg && !regTenant) return setError('Seleziona un\'organizzazione');
         if (isNewOrg && (!regNewTenantName || !regNewTenantSlug)) return setError('Specifica il nome e lo slug per la nuova organizzazione');
@@ -74,7 +73,7 @@ export default function LoginPage() {
                 isNewOrg ? regNewTenantName : null,
                 isNewOrg ? regNewTenantSlug : null
             );
-            setSuccess('Registrazione completata! Il tuo account (e la tua organizzazione se richiesta) è in attesa di approvazione.');
+            setSuccess('Registrazione completata! Il tuo account è in attesa di approvazione.');
             setTab('login');
             setLoginUser(regUser);
         } catch (err) {
@@ -94,7 +93,7 @@ export default function LoginPage() {
                     <button className={`tab ${tab === 'login' ? 'active' : ''}`} onClick={() => { setTab('login'); setError(''); }}>
                         Accedi
                     </button>
-                    <button className={`tab ${tab === 'register' ? 'active' : ''}`} onClick={() => { setTab('register'); setError(''); }}>
+                    <button className={`tab ${tab === 'register' || tab === 'register_org' ? 'active' : ''}`} onClick={() => { setTab('register'); setError(''); }}>
                         Registrati
                     </button>
                 </div>
@@ -115,71 +114,40 @@ export default function LoginPage() {
                             {loading ? 'Accesso...' : 'Entra'}
                         </button>
                     </form>
-                ) : (
+                ) : tab === 'register' ? (
                     <form onSubmit={handleRegister}>
                         <div className="form-group">
                             <label>Username</label>
                             <input className="input" value={regUser} onChange={e => setRegUser(e.target.value)} placeholder="Scegli un username" autoFocus />
                         </div>
 
-                        <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16 }}>
-                            <input
-                                type="checkbox"
-                                id="isNewOrg"
-                                checked={isNewOrg}
-                                onChange={(e) => {
-                                    setIsNewOrg(e.target.checked);
-                                    if (e.target.checked) setRegTenant('');
-                                }}
-                            />
-                            <label htmlFor="isNewOrg" style={{ margin: 0, cursor: 'pointer', fontSize: '0.9rem' }}>
-                                Vuoi registrare una nuova organizzazione?
-                            </label>
+                        <div className="form-group">
+                            <label>Scegli un'organizzazione esistente</label>
+                            <div style={{ position: 'relative' }}>
+                                <select
+                                    className="input"
+                                    value={regTenant}
+                                    onChange={e => setRegTenant(e.target.value)}
+                                    style={{ paddingLeft: 38 }}
+                                >
+                                    <option value="" disabled>Seleziona un tenant...</option>
+                                    {tenants.map(t => (
+                                        <option key={t.id} value={t.id}>{t.name}</option>
+                                    ))}
+                                </select>
+                                <Users size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
+                            </div>
                         </div>
 
-                        {!isNewOrg ? (
-                            <div className="form-group">
-                                <label>Scegli un'organizzazione esistente</label>
-                                <div style={{ position: 'relative' }}>
-                                    <select
-                                        className="input"
-                                        value={regTenant}
-                                        onChange={e => setRegTenant(e.target.value)}
-                                        style={{ paddingLeft: 38 }}
-                                    >
-                                        <option value="" disabled>Seleziona un tenant...</option>
-                                        {tenants.map(t => (
-                                            <option key={t.id} value={t.id}>{t.name}</option>
-                                        ))}
-                                    </select>
-                                    <Users size={18} style={{ position: 'absolute', left: 12, top: 12, color: 'var(--text-muted)' }} />
-                                </div>
-                            </div>
-                        ) : (
-                            <div style={{ display: 'flex', gap: 12 }}>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Nome Azienda</label>
-                                    <input
-                                        className="input"
-                                        value={regNewTenantName}
-                                        onChange={e => {
-                                            setRegNewTenantName(e.target.value);
-                                            setRegNewTenantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''));
-                                        }}
-                                        placeholder="Nome"
-                                    />
-                                </div>
-                                <div className="form-group" style={{ flex: 1 }}>
-                                    <label>Slug Azienda</label>
-                                    <input
-                                        className="input"
-                                        value={regNewTenantSlug}
-                                        onChange={e => setRegNewTenantSlug(e.target.value)}
-                                        placeholder="slug-azienda"
-                                    />
-                                </div>
-                            </div>
-                        )}
+                        <div style={{ marginBottom: 16, textAlign: 'right' }}>
+                            <button
+                                type="button"
+                                onClick={() => setTab('register_org')}
+                                style={{ background: 'none', border: 'none', color: 'var(--accent-purple)', fontSize: '0.85rem', cursor: 'pointer', textDecoration: 'underline' }}
+                            >
+                                La tua organizzazione non c'è? Creane una nuova.
+                            </button>
+                        </div>
 
                         <div className="form-group">
                             <label>Password</label>
@@ -193,6 +161,64 @@ export default function LoginPage() {
                         <button className="btn btn-primary btn-full" type="submit" disabled={loading}>
                             {loading ? 'Creazione...' : 'Crea Account'}
                         </button>
+                    </form>
+                ) : (
+                    <form onSubmit={handleRegister}>
+                        <div style={{ marginBottom: 16, padding: '12px', background: 'var(--bg-tertiary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--border-subtle)' }}>
+                            <h4 style={{ marginTop: 0, marginBottom: 8, fontSize: '0.95rem' }}>Nuova Organizzazione</h4>
+                            <p style={{ margin: 0, fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                                Stai richiedendo la creazione di un nuovo spazio aziendale. Il tuo account diventerà l'amministratore una volta approvato.
+                            </p>
+                        </div>
+
+                        <div style={{ display: 'flex', gap: 12 }}>
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label>Nome Azienda</label>
+                                <input
+                                    className="input"
+                                    value={regNewTenantName}
+                                    onChange={e => {
+                                        setRegNewTenantName(e.target.value);
+                                        setRegNewTenantSlug(e.target.value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)+/g, ''));
+                                    }}
+                                    placeholder="Acme Corp"
+                                    autoFocus
+                                />
+                            </div>
+                            <div className="form-group" style={{ flex: 1 }}>
+                                <label>Slug</label>
+                                <input
+                                    className="input"
+                                    value={regNewTenantSlug}
+                                    onChange={e => setRegNewTenantSlug(e.target.value)}
+                                    placeholder="acme-corp"
+                                />
+                            </div>
+                        </div>
+
+                        <div className="form-group" style={{ marginTop: 8 }}>
+                            <label>Il tuo Username (Admin)</label>
+                            <input className="input" value={regUser} onChange={e => setRegUser(e.target.value)} placeholder="Scegli un username" />
+                        </div>
+                        <div className="form-group">
+                            <label>Password</label>
+                            <input className="input" type="password" value={regPass} onChange={e => setRegPass(e.target.value)} placeholder="Scegli una password" />
+                        </div>
+                        <div className="form-group">
+                            <label>Conferma Password</label>
+                            <input className="input" type="password" value={regConfirm} onChange={e => setRegConfirm(e.target.value)} placeholder="Ripeti la password" />
+                        </div>
+
+                        {error && <div className="error-msg">{error}</div>}
+
+                        <div style={{ display: 'flex', gap: 12, marginTop: 16 }}>
+                            <button type="button" className="btn btn-secondary" onClick={() => setTab('register')} style={{ flex: 1 }}>
+                                Annulla
+                            </button>
+                            <button className="btn btn-primary" type="submit" disabled={loading} style={{ flex: 2 }}>
+                                {loading ? 'Invio...' : 'Invia Richiesta Azienda'}
+                            </button>
+                        </div>
                     </form>
                 )}
 
