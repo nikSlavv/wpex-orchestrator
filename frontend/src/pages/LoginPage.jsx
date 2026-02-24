@@ -198,7 +198,7 @@ export default function LoginPage() {
                         </div>
 
                         <div className="form-group" style={{ marginTop: 8 }}>
-                            <label>Il tuo Username (Admin)</label>
+                            <label>Username</label>
                             <input className="input" value={regUser} onChange={e => setRegUser(e.target.value)} placeholder="Scegli un username" />
                         </div>
                         <div className="form-group">

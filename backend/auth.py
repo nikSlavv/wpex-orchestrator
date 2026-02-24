@@ -253,7 +253,11 @@ def update_user_role(user_id: int, body: dict, user=Depends(get_current_user)):
         conn.close()
         raise HTTPException(status_code=403, detail="Permessi insufficienti")
 
-    cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
+    if role in ("admin", "executive"):
+        # Global roles don't belong to a specific tenant
+        cur.execute("UPDATE users SET role = %s, tenant_id = NULL WHERE id = %s", (role, user_id))
+    else:
+        cur.execute("UPDATE users SET role = %s WHERE id = %s", (role, user_id))
     conn.commit()
     conn.close()
     return {"message": "Ruolo aggiornato", "user_id": user_id, "role": role}
@@ -266,6 +270,15 @@ def update_user_tenant(user_id: int, body: dict, user=Depends(get_current_user))
     tenant_id = body.get("tenant_id")
     conn = get_db()
     cur = conn.cursor()
+    cur.execute("SELECT role FROM users WHERE id = %s", (user_id,))
+    row = cur.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Utente non trovato")
+    if row[0] in ("admin", "executive") and tenant_id is not None:
+        conn.close()
+        raise HTTPException(status_code=400, detail="Gli utenti globali (admin) non possono essere assegnati a un tenant specifico.")
+
     cur.execute("UPDATE users SET tenant_id = %s WHERE id = %s", (tenant_id, user_id))
     conn.commit()
     conn.close()
