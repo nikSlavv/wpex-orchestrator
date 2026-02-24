@@ -18,6 +18,7 @@ export default function LoginPage() {
 
     // Register form
     const [regUser, setRegUser] = useState('');
+    const [regPass, setRegPass] = useState('');
     const [regConfirm, setRegConfirm] = useState('');
     const [regTenant, setRegTenant] = useState('');
     const [regNewTenantName, setRegNewTenantName] = useState('');
