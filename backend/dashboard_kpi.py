@@ -315,49 +315,26 @@ def get_topology_data(user=Depends(get_current_user)):
     # Edges — key-to-relay links
     if is_tenant_scoped:
         cur.execute("""
-            SELECT skl.key_id, skl.server_id, ten.name as tenant_name, s.name as server_name, k.public_key
+            SELECT skl.key_id, skl.server_id, ten.name as tenant_name
             FROM server_keys_link skl
             JOIN access_keys k ON skl.key_id = k.id
-            JOIN servers s ON skl.server_id = s.id
             LEFT JOIN tenants ten ON k.tenant_id = ten.id
             WHERE k.tenant_id = %s
         """, (tenant_id,))
     else:
         cur.execute("""
-            SELECT skl.key_id, skl.server_id, ten.name as tenant_name, s.name as server_name, k.public_key
+            SELECT skl.key_id, skl.server_id, ten.name as tenant_name
             FROM server_keys_link skl
             JOIN access_keys k ON skl.key_id = k.id
-            JOIN servers s ON skl.server_id = s.id
             LEFT JOIN tenants ten ON k.tenant_id = ten.id
         """)
-    links = cur.fetchall()
-
-    server_names = {link[3] for link in links}
-    server_stats = {}
-    for s_name in server_names:
-        stats = _fetch_relay_stats(f"wpex-{s_name}")
-        server_stats[s_name] = stats.get("peers", {}) if stats else {}
-
     edges = []
-    for link in links:
-        key_id, server_id, tenant_name, server_name, public_key = link
-        status = ""  # Default grey
-        
-        peers = server_stats.get(server_name, {})
-        if peers and public_key in peers:
-            p = peers[public_key]
-            # Consider active if status is 1 or endpoint is known
-            if p.get("status") == 1 or p.get("endpoint"):
-                status = "active"
-            else:
-                status = "down"
-
+    for link in cur.fetchall():
         edges.append({
-            "id": f"edge-k{key_id}-s{server_id}",
-            "source": f"key-{key_id}",
-            "target": f"relay-{server_id}",
-            "tenant": tenant_name,
-            "status": status
+            "id": f"edge-k{link[0]}-s{link[1]}",
+            "source": f"key-{link[0]}",
+            "target": f"relay-{link[1]}",
+            "tenant": link[2]
         })
 
     conn.close()
