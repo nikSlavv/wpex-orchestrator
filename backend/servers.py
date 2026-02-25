@@ -379,7 +379,7 @@ def update_keys(server_id: int, body: UpdateKeysRequest, user=Depends(get_curren
         cur.execute("INSERT INTO server_keys_link (server_id, key_id) VALUES (%s, %s)", (server_id, kid))
     conn.commit()
 
-    # Redeploy with new keys
+    # Fetch raw WireGuard public keys for the selected key IDs
     cur.execute(
         "SELECT pgp_sym_decrypt(key_value, %s) FROM access_keys WHERE id = ANY(%s)",
         (DATA_KEY, body.key_ids),
@@ -387,17 +387,34 @@ def update_keys(server_id: int, body: UpdateKeysRequest, user=Depends(get_curren
     raw_keys = [r[0] for r in cur.fetchall()]
     conn.close()
 
+    # Try hot-reload first — zero downtime for peers whose keys are still valid.
+    # Falls back to full redeploy only when the relay pod doesn't exist yet.
+    import requests as _req
+    container_name = f"wpex-{name}"
+    try:
+        reload_url = f"http://{container_name}.wpex.svc.cluster.local:8080/api/v1/config/reload"
+        resp = _req.post(reload_url, json={"public_keys": raw_keys}, timeout=5)
+        if resp.status_code == 200:
+            log_audit_event(
+                user_id=user["id"], action="update_keys", entity_type="relay",
+                entity_id=server_id, details={"name": name, "key_count": len(body.key_ids), "method": "hot_reload"}
+            )
+            return {"message": "Chiavi aggiornate via hot-reload (nessun riavvio)"}
+    except Exception:
+        pass  # Relay not running yet — fall through to full deploy
+
     _deploy_relay(name, udp_port, web_port, raw_keys)
-    
+
     log_audit_event(
         user_id=user["id"],
         action="update_keys",
         entity_type="relay",
         entity_id=server_id,
-        details={"name": name, "key_count": len(body.key_ids)}
+        details={"name": name, "key_count": len(body.key_ids), "method": "redeploy"}
     )
-    
+
     return {"message": "Chiavi aggiornate e server riavviato"}
+
 
 
 @router.get("/{server_id}/logs")
