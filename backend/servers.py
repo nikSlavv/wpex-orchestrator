@@ -87,7 +87,7 @@ def _deploy_relay(name, udp_port, web_port, keys_list):
         image=IMAGE_NAME,
         args=cmd_args,
         ports=[
-            client.V1ContainerPort(container_port=udp_port, protocol="UDP"),
+            client.V1ContainerPort(container_port=udp_port, host_port=udp_port, protocol="UDP"),
             client.V1ContainerPort(container_port=8080, protocol="TCP")
         ],
         security_context=client.V1SecurityContext(capabilities=client.V1Capabilities(add=["NET_ADMIN"]))
