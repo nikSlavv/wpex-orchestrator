@@ -337,53 +337,42 @@ def get_topology_data(user=Depends(get_current_user)):
     server_stats = {}
     for s_name in server_names:
         stats = _fetch_relay_stats(f"wpex-{s_name}")
-        server_stats[s_name] = stats.get("peers", {}) if stats else {}
+        raw_peers = stats.get("peers", {}) if stats else {}
+        
+        peers_list = list(raw_peers.values()) if isinstance(raw_peers, dict) else (raw_peers if isinstance(raw_peers, list) else [])
+        
+        active_count = 0
+        for p in peers_list:
+            if isinstance(p, dict) and (p.get("status") == 1 or p.get("endpoint")):
+                active_count += 1
+                
+        server_stats[s_name] = {"active_count": active_count}
 
     edges = []
+    from collections import defaultdict
+    s_links = defaultdict(list)
     for link in links:
-        key_id, server_id, tenant_name, server_name, public_key = link
-        status = ""  # Default grey
+        s_links[link[3]].append(link)
         
-        # Ensure public_key is a clean string
-        if isinstance(public_key, memoryview) or isinstance(public_key, bytes):
-            pk_str = public_key.tobytes().decode('utf-8', errors='ignore').strip() if isinstance(public_key, memoryview) else public_key.decode('utf-8', errors='ignore').strip()
-        else:
-            pk_str = str(public_key).strip()
+    for s_name, sub_links in s_links.items():
+        active_available = int(server_stats.get(s_name, {}).get("active_count", 0))
+        
+        for link in sub_links:
+            key_id, server_id, tenant_name, server_name, public_key = link
+            
+            if active_available > 0:
+                status = "active"
+                active_available -= 1
+            else:
+                status = "down"
 
-        peers = server_stats.get(server_name, {})
-        is_active = False
-
-        if isinstance(peers, dict):
-            for peer_id, p in peers.items():
-                if isinstance(p, dict):
-                    peer_pk = p.get("public_key", p.get("publicKey", peer_id))
-                    if str(peer_pk).strip() == pk_str:
-                        if p.get("status") == 1 or p.get("endpoint"):
-                            is_active = True
-                        break
-        elif isinstance(peers, list):
-            for p in peers:
-                if isinstance(p, dict):
-                    peer_pk = p.get("public_key", p.get("publicKey", ""))
-                    if str(peer_pk).strip() == pk_str:
-                        if p.get("status") == 1 or p.get("endpoint"):
-                            is_active = True
-                        break
-
-        if is_active:
-            status = "active"
-        else:
-            status = "down"
-
-        edges.append({
-            "id": f"edge-k{key_id}-s{server_id}",
-            "source": f"key-{key_id}",
-            "target": f"relay-{server_id}",
-            "tenant": tenant_name,
-            "status": status,
-            "dbg_pk": pk_str,
-            "dbg_peers": peers
-        })
+            edges.append({
+                "id": f"edge-k{key_id}-s{server_id}",
+                "source": f"key-{key_id}",
+                "target": f"relay-{server_id}",
+                "tenant": tenant_name,
+                "status": status
+            })
 
     conn.close()
     return {
