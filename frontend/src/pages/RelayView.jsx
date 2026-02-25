@@ -84,7 +84,12 @@ export default function RelayView() {
         }
     }, [name, id]);
 
-    useEffect(() => { if (relayId) loadData(); }, [relayId]);
+    useEffect(() => {
+        if (!relayId) return;
+        loadData();
+        const interval = setInterval(loadData, 10000);
+        return () => clearInterval(interval);
+    }, [relayId]);
 
     const handleRestart = async () => {
         try { await api.restartRelay(parseInt(relayId)); loadData(); } catch (e) { alert(e.message); }

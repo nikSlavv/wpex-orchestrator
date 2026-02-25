@@ -42,7 +42,11 @@ export default function RelaysView() {
         finally { setLoading(false); }
     };
 
-    useEffect(() => { loadData(); }, []);
+    useEffect(() => {
+        loadData();
+        const interval = setInterval(loadData, 15000);
+        return () => clearInterval(interval);
+    }, []);
 
     const filteredServers = servers.filter(s =>
         s.name.toLowerCase().includes(search.toLowerCase())
