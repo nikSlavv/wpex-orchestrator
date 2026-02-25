@@ -28,7 +28,7 @@ function HealthRing({ value, size = 64 }) {
 }
 
 export default function RelayView() {
-    const { id, name } = useParams();
+    const { id } = useParams();   // handles both /relays/7 and /relays/asd
     const [relay, setRelay] = useState(null);
     const [health, setHealth] = useState(null);
     const [container, setContainer] = useState(null);
@@ -45,10 +45,13 @@ export default function RelayView() {
     const [availableKeys, setAvailableKeys] = useState([]);
     const [selectedKeyIds, setSelectedKeyIds] = useState([]);
     const [updatingKeys, setUpdatingKeys] = useState(false);
-    const isMutating = useRef(false);  // ref-based flag to pause polling during mutations
+    const isMutating = useRef(false);
 
-    // Resolve relay ID from name or params
-    const [relayId, setRelayId] = useState(id);
+    // Resolve relay ID: if id param is numeric use it directly, otherwise treat as name
+    const [relayId, setRelayId] = useState(() => {
+        const parsed = parseInt(id);
+        return isNaN(parsed) ? null : parsed;
+    });
 
     const loadData = async () => {
         const rid = parseInt(relayId);
@@ -75,15 +78,16 @@ export default function RelayView() {
         finally { setLoading(false); }
     };
 
+    // If id is a name (non-numeric), resolve it to a numeric ID
     useEffect(() => {
-        if (name && !id) {
-            // Resolve name → id via servers list
+        const parsed = parseInt(id);
+        if (isNaN(parsed)) {
             api.getServers().then(data => {
-                const found = data.servers?.find(s => s.name === name);
+                const found = data.servers?.find(s => s.name === id);
                 if (found) setRelayId(found.id);
             });
         }
-    }, [name, id]);
+    }, [id]);
 
     useEffect(() => {
         if (!relayId) return;

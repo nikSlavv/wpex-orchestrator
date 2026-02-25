@@ -59,48 +59,47 @@ def _fetch_relay_stats(container_name: str) -> Optional[dict]:
     return None
 
 
-def _compute_health_score(docker_status: str, stats: Optional[dict], restart_count: int = 0) -> float:
-    """Compute composite health score (0-100) for a relay."""
-    score = 100.0
-
-    # Container status penalty
-    if docker_status != "running":
+def _compute_health_score(status: str, stats, restart_count: int = 0) -> float:
+    """Compute composite health score (0-100) using the same weighted-average as relay_proxy."""
+    if status != "running":
         return 0.0
 
-    # Restart count penalty (15% weight)
-    if restart_count > 5:
-        score -= 15
-    elif restart_count > 2:
-        score -= 8
-    elif restart_count > 0:
-        score -= 3
+    components = {}
+
+    # Container status
+    components["container"] = 100.0
+
+    # Restart penalty
+    rc_score = max(0, 100 - restart_count * 10)
+    components["restarts"] = float(rc_score)
 
     if stats:
-        # Handshake success rate (25% weight)
+        # Handshake rate
         total_hs = stats.get("total_handshakes", 0)
         success_hs = stats.get("successful_handshakes", 0)
         if total_hs > 0:
-            success_rate = success_hs / total_hs
-            if success_rate < 0.5:
-                score -= 25
-            elif success_rate < 0.8:
-                score -= 15
-            elif success_rate < 0.95:
-                score -= 5
+            components["handshake_rate"] = round(success_hs / total_hs * 100, 1)
+        else:
+            components["handshake_rate"] = 100.0
 
-        # Active sessions health (check if peers are connected)
+        # Peer connectivity
         peers = stats.get("peers", {})
-        if isinstance(peers, dict):
-            total_peers = len(peers)
+        if isinstance(peers, dict) and len(peers) > 0:
             connected = sum(1 for p in peers.values() if isinstance(p, dict) and p.get("status") == 1)
-            if total_peers > 0:
-                connected_ratio = connected / total_peers
-                if connected_ratio < 0.5:
-                    score -= 20
-                elif connected_ratio < 0.8:
-                    score -= 10
+            components["connectivity"] = round(connected / len(peers) * 100, 1)
+        else:
+            components["connectivity"] = 100.0
 
-    return max(0.0, min(100.0, score))
+    # Weighted average — same weights as relay_proxy.py
+    weights = {"container": 0.2, "restarts": 0.15, "handshake_rate": 0.35, "connectivity": 0.3}
+    weighted_sum = 0.0
+    total_weight = 0.0
+    for k, w in weights.items():
+        if k in components:
+            weighted_sum += components[k] * w
+            total_weight += w
+
+    return round(weighted_sum / total_weight, 1) if total_weight > 0 else 0.0
 
 
 @router.get("/kpi")

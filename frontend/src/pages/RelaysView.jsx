@@ -239,7 +239,7 @@ function renderServerTable(servers, kpi, canMutate, handleStart, handleStop, han
                         return (
                             <tr key={s.id}>
                                 <td>
-                                    <Link to={`/relays/${s.id}`} style={{ color: 'var(--accent-purple-light)', textDecoration: 'none', fontWeight: 600 }}>
+                                    <Link to={`/relays/${s.name}`} style={{ color: 'var(--accent-purple-light)', textDecoration: 'none', fontWeight: 600 }}>
                                         {s.name}
                                     </Link>
                                 </td>
@@ -273,7 +273,7 @@ function renderServerTable(servers, kpi, canMutate, handleStart, handleStop, han
                                                 <Square size={12} />
                                             </button>
                                         )}
-                                        <Link to={`/relays/${s.id}`} className="btn btn-sm" title="Dettagli">
+                                        <Link to={`/relays/${s.name}`} className="btn btn-sm" title="Dettagli">
                                             <ChevronRight size={12} />
                                         </Link>
                                         {canMutate && (
