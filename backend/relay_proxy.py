@@ -121,8 +121,13 @@ def get_relay_health(relay_id: int, user=Depends(get_current_user)):
             total_hs = stats.get("total_handshakes", 0)
             success_hs = stats.get("successful_handshakes", 0)
             if total_hs > 0:
-                hs_rate = success_hs / total_hs * 100
-                components["handshake_rate"] = {"score": round(hs_rate, 1), "detail": f"{round(hs_rate,1)}% success"}
+                # Use Laplace smoothing to avoid aggressive 50% penalties on very low traffic (e.g., 1 of 2 successful at boot)
+                if total_hs < 10:
+                    smoothed_rate = (success_hs + 2) / (total_hs + 2) * 100
+                    hs_rate = min(100.0, smoothed_rate)
+                else:
+                    hs_rate = success_hs / total_hs * 100
+                components["handshake_rate"] = {"score": round(hs_rate, 1), "detail": f"{success_hs}/{total_hs} success"}
             else:
                 components["handshake_rate"] = {"score": 100, "detail": "No handshakes yet"}
 
