@@ -118,7 +118,8 @@ def _deploy_relay(name, udp_port, web_port, keys_list):
         spec=client.V1ServiceSpec(
             selector={"app": app_name},
             ports=[
-                client.V1ServicePort(name="udp", port=udp_port, target_port=udp_port, protocol="UDP")
+                client.V1ServicePort(name="udp", port=udp_port, target_port=udp_port, protocol="UDP"),
+                client.V1ServicePort(name="http", port=8080, target_port=8080, protocol="TCP")
             ],
             type="NodePort"
         )
