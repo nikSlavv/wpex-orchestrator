@@ -7,9 +7,12 @@ import {
     Wifi, ArrowUpRight, ChevronRight, Search, Key
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { useDialog } from '../contexts/DialogContext';
+import CustomSelect from '../components/CustomSelect';
 
 export default function RelaysView() {
     const { user } = useAuth();
+    const { confirm, alert } = useDialog();
     const canMutate = !['viewer', 'executive'].includes(user?.role);
     const [servers, setServers] = useState([]);
     const [kpi, setKpi] = useState(null);
@@ -62,18 +65,19 @@ export default function RelaysView() {
             setSelectedKeyIds([]);
             setSelectedTenant('');
             loadData();
-        } catch (e) { alert(e.message); }
+        } catch (e) { alert(e.message, { title: 'Errore Creazione' }); }
     };
 
     const handleStart = async (id) => {
-        try { await api.startServer(id); loadData(); } catch (e) { alert(e.message); }
+        try { await api.startServer(id); loadData(); } catch (e) { alert(e.message, { title: 'Errore Avvio' }); }
     };
     const handleStop = async (id) => {
-        try { await api.stopServer(id); loadData(); } catch (e) { alert(e.message); }
+        try { await api.stopServer(id); loadData(); } catch (e) { alert(e.message, { title: 'Errore Arresto' }); }
     };
     const handleDelete = async (id) => {
-        if (!confirm('Eliminare questo relay?')) return;
-        try { await api.deleteServer(id); loadData(); } catch (e) { alert(e.message); }
+        const ok = await confirm('Eliminare questo relay?', { danger: true });
+        if (!ok) return;
+        try { await api.deleteServer(id); loadData(); } catch (e) { alert(e.message, { title: 'Errore Cancellazione' }); }
     };
 
     return (
@@ -147,12 +151,15 @@ export default function RelaysView() {
                         {user?.role === 'admin' && (
                             <div className="form-group" style={{ marginTop: 16 }}>
                                 <label>Tenant Proprietario (Opzionale)</label>
-                                <select className="input" value={selectedTenant} onChange={e => setSelectedTenant(e.target.value)}>
-                                    <option value="">Nessuno (Globale)</option>
-                                    {tenants.map(t => (
-                                        <option key={t.id} value={t.id}>{t.name}</option>
-                                    ))}
-                                </select>
+                                <CustomSelect
+                                    value={selectedTenant}
+                                    onChange={setSelectedTenant}
+                                    placeholder="Nessuno (Globale)"
+                                    options={[
+                                        { value: '', label: 'Nessuno (Globale)' },
+                                        ...tenants.map(t => ({ value: t.id, label: t.name }))
+                                    ]}
+                                />
                             </div>
                         )}
                         <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-end' }}>

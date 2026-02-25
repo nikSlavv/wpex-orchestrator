@@ -6,9 +6,11 @@ import {
     MapPin, Link2, AlertTriangle, Key
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { useDialog } from '../contexts/DialogContext';
 
 export default function TenantsPage() {
     const { user } = useAuth();
+    const { alert, confirm, prompt } = useDialog();
     const isAdmin = user?.role === 'admin';
     const canManageSites = !['viewer', 'executive'].includes(user?.role);
     const [tenants, setTenants] = useState([]);
@@ -36,16 +38,18 @@ export default function TenantsPage() {
             setShowCreate(false);
             setForm({ name: '', slug: '', max_bandwidth_mbps: 100 });
             loadData();
-        } catch (e) { alert(e.message); }
+        } catch (e) { alert(e.message, { title: 'Errore Creazione' }); }
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Eliminare questo tenant e tutti i dati associati?')) return;
+        const ok = await confirm('Eliminare questo tenant e tutti i dati associati?', { danger: true });
+        if (!ok) return;
         try { await api.deleteTenant(id); loadData(); } catch (e) { alert(e.message); }
     };
 
     const handleApprove = async (id) => {
-        if (!confirm('Approvare questo tenant e attivarlo?')) return;
+        const ok = await confirm('Approvare questo tenant e attivarlo?');
+        if (!ok) return;
         try { await api.updateTenantStatus(id, 'active'); loadData(); } catch (e) { alert(e.message); }
     };
 
@@ -65,7 +69,7 @@ export default function TenantsPage() {
             setShowSiteCreate(null);
             handleExpand(tenantId);
             loadData();
-        } catch (e) { alert(e.message); }
+        } catch (e) { alert(e.message, { title: 'Errore' }); }
     };
 
     const handleDeleteSite = async (tenantId, siteId) => {
@@ -73,13 +77,16 @@ export default function TenantsPage() {
     };
 
     const handleSetSlug = async (id, currentName) => {
-        const newSlug = window.prompt(`Inserisci lo slug per ${currentName}:`);
+        const newSlug = await prompt(`Inserisci lo slug per ${currentName}:`, {
+            title: 'Imposta Slug',
+            placeholder: 'es: nome-azienda'
+        });
         if (newSlug) {
             try {
                 await api.updateTenant(id, { slug: newSlug });
                 loadData();
             } catch (e) {
-                alert(e.message);
+                alert(e.message, { title: 'Errore' });
             }
         }
     };

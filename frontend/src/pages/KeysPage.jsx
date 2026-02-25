@@ -3,9 +3,12 @@ import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import { Key, Plus, Trash2, RefreshCw, Copy, Check } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { useDialog } from '../contexts/DialogContext';
+import CustomSelect from '../components/CustomSelect';
 
 export default function KeysPage() {
     const { user } = useAuth();
+    const { alert, confirm } = useDialog();
     const isAdmin = user?.role === 'admin';
     const canMutate = !['viewer', 'executive'].includes(user?.role);
     const [keys, setKeys] = useState([]);
@@ -41,12 +44,13 @@ export default function KeysPage() {
             setKeyValue('');
             setSelectedTenant('');
             loadData();
-        } catch (e) { alert(e.message); }
+        } catch (e) { alert(e.message, { title: 'Errore Creazione Chiave' }); }
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Eliminare questa chiave?')) return;
-        try { await api.deleteKey(id); loadData(); } catch (e) { alert(e.message); }
+        const ok = await confirm('Eliminare questa chiave in modo permanente?', { title: 'Elimina Chiave', danger: true });
+        if (!ok) return;
+        try { await api.deleteKey(id); loadData(); } catch (e) { alert(e.message, { title: 'Errore' }); }
     };
 
     const copyKey = async (id, key) => {
@@ -103,12 +107,15 @@ export default function KeysPage() {
                             {user?.role === 'admin' && (
                                 <div className="form-group">
                                     <label>Tenant Proprietario (Opzionale)</label>
-                                    <select className="input" value={selectedTenant} onChange={e => setSelectedTenant(e.target.value)}>
-                                        <option value="">Nessuno (Globale)</option>
-                                        {tenants.map(t => (
-                                            <option key={t.id} value={t.id}>{t.name}</option>
-                                        ))}
-                                    </select>
+                                    <CustomSelect
+                                        value={selectedTenant}
+                                        onChange={setSelectedTenant}
+                                        placeholder="Nessuno (Globale)"
+                                        options={[
+                                            { value: '', label: 'Nessuno (Globale)' },
+                                            ...tenants.map(t => ({ value: t.id, label: t.name }))
+                                        ]}
+                                    />
                                 </div>
                             )}
                             <div style={{ marginTop: 16, display: 'flex', gap: 8, justifyContent: 'flex-start' }}>

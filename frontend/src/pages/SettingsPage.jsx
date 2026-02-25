@@ -1,11 +1,16 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../AuthContext';
+import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import { api } from '../api';
 import Sidebar from '../components/Sidebar';
-import { Settings, Users, Shield, Server, Save, RefreshCw, AlertTriangle, Trash2 } from 'lucide-react';
+import CustomSelect from '../components/CustomSelect';
+import { Settings, Users, Shield, Server, Save, RefreshCw, AlertTriangle, Trash2, Moon, Sun, Monitor } from 'lucide-react';
 
 export default function SettingsPage() {
     const { user } = useAuth();
+    const { theme, setTheme } = useTheme();
+    const { confirm } = useDialog();
     const [users, setUsers] = useState([]);
     const [tenants, setTenants] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -86,7 +91,8 @@ export default function SettingsPage() {
     };
 
     const handleDeleteUser = async (userId, username) => {
-        if (!window.confirm(`Sei sicuro di voler eliminare definitivamente l'utente ${username}?`)) return;
+        const confirmed = await confirm(`Sei sicuro di voler eliminare definitivamente l'utente ${username}?`, { title: 'Elimina Utente', danger: true });
+        if (!confirmed) return;
         setSaving(userId);
         setError('');
         setSuccess('');
@@ -140,7 +146,7 @@ export default function SettingsPage() {
                         <Shield size={16} /> Sicurezza
                     </button>
                     <button className={`tab ${tab === 'system' ? 'active' : ''}`} onClick={() => setTab('system')}>
-                        <Server size={16} /> Sistema
+                        <Server size={16} /> Sistema & UI
                     </button>
                 </div>
 
@@ -362,9 +368,26 @@ export default function SettingsPage() {
                 {tab === 'system' && (
                     <div className="card">
                         <h2 style={{ marginBottom: 16, fontSize: '1.1rem' }}>
-                            <Server size={20} /> Informazioni di Sistema
+                            <Server size={20} /> Informazioni di Sistema & Interfaccia
                         </h2>
                         <div style={{ display: 'grid', gap: 16 }}>
+                            <div className="card" style={{ background: 'rgba(255,255,255,0.02)' }}>
+                                <h3 style={{ fontSize: '0.95rem', marginBottom: 16 }}>Preferenze UI</h3>
+                                <div style={{ maxWidth: 300 }}>
+                                    <div className="form-group">
+                                        <label>Tema Interfaccia</label>
+                                        <CustomSelect
+                                            value={theme}
+                                            onChange={setTheme}
+                                            options={[
+                                                { value: 'dark', label: 'Dark Mode (Default)', icon: <Moon size={14} /> },
+                                                { value: 'light', label: 'Light Mode', icon: <Sun size={14} /> },
+                                                { value: 'midnight', label: 'Midnight Blue', icon: <Monitor size={14} /> }
+                                            ]}
+                                        />
+                                    </div>
+                                </div>
+                            </div>
                             <div className="card" style={{ background: 'rgba(255,255,255,0.02)' }}>
                                 <h3 style={{ fontSize: '0.95rem', marginBottom: 8 }}>Backend</h3>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, fontSize: '0.88rem' }}>

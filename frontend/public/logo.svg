@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+    <defs>
+        <linearGradient id="purpleGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#9b8afb" />
+            <stop offset="100%" stop-color="#7c6aef" />
+        </linearGradient>
+        <linearGradient id="greenGlow" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#34d399" />
+            <stop offset="100%" stop-color="#059669" />
+        </linearGradient>
+        <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feComposite in="SourceGraphic" in2="blur" operator="over" />
+        </filter>
+    </defs>
+
+    <!-- Background hexagon container -->
+    <path d="M50 8 L90 30 L90 70 L50 92 L10 70 L10 30 Z" fill="#14141e" stroke="rgba(255,255,255,0.06)" stroke-width="2"/>
+
+    <!-- 'W' / Mesh topology path -->
+    <path d="M22 38 L36 68 L50 48 L64 68 L78 38" stroke="url(#purpleGlow)" stroke-width="7" stroke-linecap="round" stroke-linejoin="round" filter="url(#glow)"/>
+    
+    <!-- Central nodes -->
+    <circle cx="50" cy="48" r="6.5" fill="url(#greenGlow)" filter="url(#glow)"/>
+    <circle cx="36" cy="68" r="5" fill="url(#purpleGlow)"/>
+    <circle cx="64" cy="68" r="5" fill="url(#purpleGlow)"/>
+    <circle cx="22" cy="38" r="4.5" fill="url(#purpleGlow)"/>
+    <circle cx="78" cy="38" r="4.5" fill="url(#purpleGlow)"/>
+</svg>
