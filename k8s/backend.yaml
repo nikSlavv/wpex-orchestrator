@@ -43,7 +43,7 @@ spec:
       volumes:
       - name: app-code
         hostPath:
-          path: /var/lib/wpex/backend # Adjust this path to where your code lives on the node
+          path: /root/wpex-orchestrator/backend
           type: DirectoryOrCreate
 ---
 apiVersion: v1

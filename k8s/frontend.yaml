@@ -32,7 +32,7 @@ spec:
       volumes:
       - name: frontend-code
         hostPath:
-          path: /var/lib/wpex/frontend # Adjust this path to where your frontend code lives on the node
+          path: /root/wpex-orchestrator/frontend
           type: DirectoryOrCreate
 ---
 apiVersion: v1
