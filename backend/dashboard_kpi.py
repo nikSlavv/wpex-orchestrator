@@ -344,21 +344,46 @@ def get_topology_data(user=Depends(get_current_user)):
         key_id, server_id, tenant_name, server_name, public_key = link
         status = ""  # Default grey
         
+        # Ensure public_key is a clean string
+        if isinstance(public_key, memoryview) or isinstance(public_key, bytes):
+            pk_str = public_key.tobytes().decode('utf-8', errors='ignore').strip() if isinstance(public_key, memoryview) else public_key.decode('utf-8', errors='ignore').strip()
+        else:
+            pk_str = str(public_key).strip()
+
         peers = server_stats.get(server_name, {})
-        if peers and public_key in peers:
-            p = peers[public_key]
-            # Consider active if status is 1 or endpoint is known
-            if p.get("status") == 1 or p.get("endpoint"):
-                status = "active"
-            else:
-                status = "down"
+        debug_peers = []
+        is_active = False
+
+        if isinstance(peers, dict):
+            debug_peers = list(peers.keys())[:3]
+            for peer_pk, p in peers.items():
+                if peer_pk.strip() == pk_str:
+                    if p.get("status") == 1 or p.get("endpoint"):
+                        is_active = True
+                    break
+        elif isinstance(peers, list):
+            for p in peers:
+                peer_pk = p.get("public_key") or p.get("publicKey") or ""
+                if peer_pk:
+                    debug_peers.append(peer_pk)
+                if peer_pk.strip() == pk_str:
+                    if p.get("status") == 1 or p.get("endpoint"):
+                        is_active = True
+                    break
+
+        if is_active:
+            status = "active"
+        else:
+            status = "down"
 
         edges.append({
             "id": f"edge-k{key_id}-s{server_id}",
             "source": f"key-{key_id}",
             "target": f"relay-{server_id}",
             "tenant": tenant_name,
-            "status": status
+            "status": status,
+            "dbg_pk": pk_str,
+            "dbg_peers": debug_peers
         })
 
     conn.close()
