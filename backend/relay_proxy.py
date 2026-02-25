@@ -70,7 +70,7 @@ def get_relay_stats(relay_id: int, user=Depends(get_current_user)):
 
     container_name = f"wpex-{name}"
     try:
-        resp = http_requests.get(f"http://{container_name}:8080/stats", timeout=3)
+        resp = http_requests.get(f"http://{container_name}.wpex.svc.cluster.local:8080/stats", timeout=3)
         if resp.status_code == 200:
             return resp.json()
     except Exception as e:
@@ -95,7 +95,7 @@ def get_relay_health(relay_id: int, user=Depends(get_current_user)):
     # WPEX stats
     stats = None
     try:
-        resp = http_requests.get(f"http://{container_name}:8080/stats", timeout=2)
+        resp = http_requests.get(f"http://{container_name}.wpex.svc.cluster.local:8080/stats", timeout=2)
         if resp.status_code == 200:
             stats = resp.json()
     except:

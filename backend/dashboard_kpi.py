@@ -51,7 +51,7 @@ def _get_k8s_pod_status(name: str):
 def _fetch_relay_stats(container_name: str) -> Optional[dict]:
     """Fetch stats from a WPEX relay container via internal Docker network."""
     try:
-        resp = requests.get(f"http://{container_name}:8080/stats", timeout=2)
+        resp = requests.get(f"http://{container_name}.wpex.svc.cluster.local:8080/stats", timeout=2)
         if resp.status_code == 200:
             return resp.json()
     except:
