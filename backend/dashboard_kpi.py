@@ -11,6 +11,42 @@ from auth import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
+def _init_k8s():
+    try:
+        from kubernetes import config
+        config.load_incluster_config()
+    except:
+        try:
+            from kubernetes import config
+            config.load_kube_config()
+        except:
+            pass
+
+def _get_k8s_pod_status(name: str):
+    from kubernetes import client
+    _init_k8s()
+    try:
+        core_api = client.CoreV1Api()
+        pods = core_api.list_namespaced_pod(namespace="wpex", label_selector=f"app=wpex-{name}")
+        if not pods.items:
+            try:
+                apps_api = client.AppsV1Api()
+                apps_api.read_namespaced_deployment(name=f"wpex-{name}", namespace="wpex")
+                return "stopped", 0
+            except:
+                return "not_created", 0
+                
+        pod = pods.items[0]
+        status = pod.status.phase.lower()
+        if status == "running":
+            is_ready = any(cond.type == "Ready" and cond.status == "True" for cond in pod.status.conditions) if pod.status.conditions else False
+            if not is_ready:
+                status = "starting"
+        restart_count = sum([c.restart_count for c in pod.status.container_statuses]) if pod.status.container_statuses else 0
+        return status, restart_count
+    except:
+        return "error", 0
+
 
 def _fetch_relay_stats(container_name: str) -> Optional[dict]:
     """Fetch stats from a WPEX relay container via internal Docker network."""
@@ -122,26 +158,11 @@ def get_dashboard_kpi(user=Depends(get_current_user)):
     total_peers = 0
     relay_details = []
 
-    import docker
-    try:
-        docker_client = docker.from_env()
-    except:
-        docker_client = None
-
     for relay in relays:
         rid, name, udp_port, web_port, t_id, t_name = relay
         container_name = f"wpex-{name}"
 
-        # Docker status
-        status = "unknown"
-        restart_count = 0
-        if docker_client:
-            try:
-                c = docker_client.containers.get(container_name)
-                status = c.status
-                restart_count = c.attrs.get("RestartCount", 0)
-            except:
-                status = "not_created"
+        status, restart_count = _get_k8s_pod_status(name)
 
         if status == "running":
             relays_active += 1
@@ -198,41 +219,27 @@ def get_dashboard_alerts(user=Depends(get_current_user)):
 
     alerts = []
 
-    import docker
-    try:
-        docker_client = docker.from_env()
-    except:
-        docker_client = None
-
     for relay in relays:
         rid, name = relay
         container_name = f"wpex-{name}"
 
-        if docker_client:
-            try:
-                c = docker_client.containers.get(container_name)
-                if c.status != "running":
-                    alerts.append({
-                        "severity": "critical",
-                        "relay": name,
-                        "message": f"Relay {name} non è in esecuzione (stato: {c.status})",
-                        "type": "relay_down",
-                    })
-                restart_count = c.attrs.get("RestartCount", 0)
-                if restart_count > 3:
-                    alerts.append({
-                        "severity": "warning",
-                        "relay": name,
-                        "message": f"Relay {name} ha {restart_count} restart",
-                        "type": "high_restarts",
-                    })
-            except:
-                alerts.append({
-                    "severity": "critical",
-                    "relay": name,
-                    "message": f"Container {container_name} non trovato",
-                    "type": "container_missing",
-                })
+        status, restart_count = _get_k8s_pod_status(name)
+
+        if status != "running":
+            alerts.append({
+                "severity": "critical",
+                "relay": name,
+                "message": f"Relay {name} non è in esecuzione (stato: {status})",
+                "type": "relay_down",
+            })
+            
+        if restart_count > 3:
+            alerts.append({
+                "severity": "warning",
+                "relay": name,
+                "message": f"Relay {name} ha {restart_count} restart",
+                "type": "high_restarts",
+            })
 
         # Check stats
         stats = _fetch_relay_stats(container_name)

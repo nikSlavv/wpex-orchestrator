@@ -1,0 +1,33 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: wpex-ingress
+  namespace: wpex
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    # To enable TLS via cert-manager, add the issuer annotation here later.
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+spec:
+  ingressClassName: nginx
+  # tls:
+  # - hosts:
+  #   - meshify.sytes.net
+  #   secretName: wpex-tls
+  rules:
+  - host: meshify.sytes.net # Or replace with your domain/IP
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: backend
+            port:
+              number: 8000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: frontend
+            port:
+              number: 3000

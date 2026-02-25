@@ -6,7 +6,8 @@ import os
 from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import List, Optional
-import docker
+from kubernetes import client, config
+from kubernetes.client.rest import ApiException
 import requests
 
 from database import get_db, DATA_KEY
@@ -40,33 +41,37 @@ class UpdateKeysRequest(BaseModel):
 
 
 # --- Docker Helpers ---
-def _get_docker_client():
-    """Get Docker client, return None if Docker is unavailable."""
+# --- Kubernetes Helpers ---
+def _init_k8s():
     try:
-        return docker.from_env()
-    except Exception:
-        return None
-
-
-def _docker_status(container_name: str):
-    client = _get_docker_client()
-    if not client:
-        return "error"
-    try:
-        c = client.containers.get(container_name)
-        return c.status
-    except docker.errors.NotFound:
-        return "not_created"
+        config.load_incluster_config()
     except:
+        try:
+            config.load_kube_config()
+        except:
+            pass
+
+def _k8s_status(name: str):
+    _init_k8s()
+    try:
+        core_api = client.CoreV1Api()
+        pods = core_api.list_namespaced_pod(namespace="wpex", label_selector=f"app=wpex-{name}")
+        if not pods.items:
+            apps_api = client.AppsV1Api()
+            try:
+                apps_api.read_namespaced_deployment(name=f"wpex-{name}", namespace="wpex")
+                return "stopped"
+            except:
+                return "not_created"
+        
+        pod = pods.items[0]
+        return pod.status.phase.lower()
+    except Exception:
         return "error"
 
-
-
-def _deploy_container(name, udp_port, web_port, keys_list):
-    client = _get_docker_client()
-    if not client:
-        return False, "Docker non disponibile"
-    container_name = f"wpex-{name}"
+def _deploy_relay(name, udp_port, web_port, keys_list):
+    _init_k8s()
+    app_name = f"wpex-{name}"
     
     cmd_args = ["--stats", ":8080"]
     for k in keys_list:
@@ -74,23 +79,71 @@ def _deploy_container(name, udp_port, web_port, keys_list):
     if not keys_list:
         cmd_args.extend(["--allow", "placeholder"])
 
-    port_bindings = {f"{udp_port}/udp": udp_port}
+    apps_api = client.AppsV1Api()
+    core_api = client.CoreV1Api()
+
+    container = client.V1Container(
+        name="relay",
+        image=IMAGE_NAME,
+        args=cmd_args,
+        ports=[
+            client.V1ContainerPort(container_port=udp_port, protocol="UDP"),
+            client.V1ContainerPort(container_port=8080, protocol="TCP")
+        ],
+        security_context=client.V1SecurityContext(capabilities=client.V1Capabilities(add=["NET_ADMIN"]))
+    )
+    
+    template = client.V1PodTemplateSpec(
+        metadata=client.V1ObjectMeta(labels={"app": app_name}),
+        spec=client.V1PodSpec(containers=[container])
+    )
+    
+    spec = client.V1DeploymentSpec(
+        replicas=1,
+        selector=client.V1LabelSelector(match_labels={"app": app_name}),
+        template=template
+    )
+    
+    deployment = client.V1Deployment(
+        api_version="apps/v1",
+        kind="Deployment",
+        metadata=client.V1ObjectMeta(name=app_name),
+        spec=spec
+    )
+
+    service = client.V1Service(
+        api_version="v1",
+        kind="Service",
+        metadata=client.V1ObjectMeta(name=app_name),
+        spec=client.V1ServiceSpec(
+            selector={"app": app_name},
+            ports=[
+                client.V1ServicePort(name="udp", port=udp_port, target_port=udp_port, protocol="UDP")
+            ],
+            type="NodePort"
+        )
+    )
 
     try:
-        status = _docker_status(container_name)
-        if status != "not_created" and client:
-            client.containers.get(container_name).remove(force=True)
+        try:
+            apps_api.read_namespaced_deployment(name=app_name, namespace="wpex")
+            apps_api.patch_namespaced_deployment(name=app_name, namespace="wpex", body=deployment)
+        except ApiException as e:
+            if e.status == 404:
+                apps_api.create_namespaced_deployment(namespace="wpex", body=deployment)
+            else:
+                return False, str(e)
+                
+        try:
+            core_api.read_namespaced_service(name=app_name, namespace="wpex")
+            core_api.patch_namespaced_service(name=app_name, namespace="wpex", body=service)
+        except ApiException as e:
+            if e.status == 404:
+                core_api.create_namespaced_service(namespace="wpex", body=service)
+            else:
+                return False, str(e)
 
-        client.containers.run(
-            image=IMAGE_NAME,
-            name=container_name,
-            command=cmd_args,
-            ports=port_bindings,
-            network=WPEX_NETWORK,
-            restart_policy={"Name": "always"},
-            detach=True,
-        )
-        return True, "Container avviato"
+        return True, "Relay avviato su Kubernetes"
     except Exception as e:
         return False, str(e)
 
@@ -121,7 +174,7 @@ def list_servers(user=Depends(get_current_user)):
             (DATA_KEY, sid),
         )
         keys_data = [{"id": k[0], "alias": k[1], "key": k[2]} for k in cur.fetchall()]
-        status = _docker_status(f"wpex-{name}")
+        status = _k8s_status(name)
         servers.append({
             "id": sid, "name": name, "udp_port": udp_port, "web_port": web_port,
             "tenant_id": tenant_id, "region": region, "description": description,
@@ -169,7 +222,7 @@ def create_server(body: CreateServerRequest, user=Depends(get_current_user)):
         raw_keys = [r[0] for r in cur.fetchall()]
         conn.close()
 
-        ok, msg = _deploy_container(name, body.udp_port, web_port, raw_keys)
+        ok, msg = _deploy_relay(name, body.udp_port, web_port, raw_keys)
         
         log_audit_event(
             user_id=user["id"],
@@ -203,12 +256,14 @@ def delete_server(server_id: int, user=Depends(get_current_user)):
     if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
         conn.close()
         raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
-    client = _get_docker_client()
-    if client:
-        try:
-            client.containers.get(f"wpex-{name}").remove(force=True)
-        except:
-            pass
+    _init_k8s()
+    try:
+        apps_api = client.AppsV1Api()
+        core_api = client.CoreV1Api()
+        apps_api.delete_namespaced_deployment(name=f"wpex-{name}", namespace="wpex")
+        core_api.delete_namespaced_service(name=f"wpex-{name}", namespace="wpex")
+    except:
+        pass
     
     cur.execute("DELETE FROM servers WHERE id = %s", (server_id,))
     conn.commit()
@@ -242,12 +297,14 @@ def start_server(server_id: int, user=Depends(get_current_user)):
     if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
         raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
 
-    client = _get_docker_client()
-    if client:
-        try:
-            client.containers.get(f"wpex-{name}").start()
-        except:
-            pass
+    _init_k8s()
+    try:
+        apps_api = client.AppsV1Api()
+        deployment = apps_api.read_namespaced_deployment(name=f"wpex-{name}", namespace="wpex")
+        deployment.spec.replicas = 1
+        apps_api.patch_namespaced_deployment(name=f"wpex-{name}", namespace="wpex", body=deployment)
+    except:
+        pass
             
     log_audit_event(
         user_id=user["id"],
@@ -277,12 +334,14 @@ def stop_server(server_id: int, user=Depends(get_current_user)):
     if user.get("role") == "engineer" and tenant_id != user.get("tenant_id"):
         raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
 
-    client = _get_docker_client()
-    if client:
-        try:
-            client.containers.get(f"wpex-{row[0]}").stop()
-        except:
-            pass
+    _init_k8s()
+    try:
+        apps_api = client.AppsV1Api()
+        deployment = apps_api.read_namespaced_deployment(name=f"wpex-{name}", namespace="wpex")
+        deployment.spec.replicas = 0
+        apps_api.patch_namespaced_deployment(name=f"wpex-{name}", namespace="wpex", body=deployment)
+    except:
+        pass
             
     log_audit_event(
         user_id=user["id"],
@@ -327,7 +386,7 @@ def update_keys(server_id: int, body: UpdateKeysRequest, user=Depends(get_curren
     raw_keys = [r[0] for r in cur.fetchall()]
     conn.close()
 
-    _deploy_container(name, udp_port, web_port, raw_keys)
+    _deploy_relay(name, udp_port, web_port, raw_keys)
     
     log_audit_event(
         user_id=user["id"],
@@ -354,13 +413,15 @@ def get_logs(server_id: int, user=Depends(get_current_user)):
     if user.get("role") in ("engineer", "viewer") and tenant_id != user.get("tenant_id"):
         raise HTTPException(status_code=403, detail="Server non appartiene alla tua organizzazione")
 
-    client = _get_docker_client()
-    if not client:
-        return {"logs": "Docker non disponibile."}
+    _init_k8s()
     try:
-        logs = client.containers.get(f"wpex-{row[0]}").logs(
-            tail=30, timestamps=True
-        ).decode("utf-8", errors="ignore")
+        core_api = client.CoreV1Api()
+        pods = core_api.list_namespaced_pod(namespace="wpex", label_selector=f"app=wpex-{name}")
+        if not pods.items:
+            return {"logs": "Nessun pod attivo trovato."}
+        
+        pod_name = pods.items[0].metadata.name
+        logs = core_api.read_namespaced_pod_log(name=pod_name, namespace="wpex", tail_lines=30)
         return {"logs": logs}
-    except:
-        return {"logs": "Nessun log disponibile."}
+    except Exception as e:
+        return {"logs": f"Errore nel recupero log: {str(e)}"}
