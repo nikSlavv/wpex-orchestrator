@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { api } from '../api';
@@ -45,6 +45,7 @@ export default function RelayView() {
     const [availableKeys, setAvailableKeys] = useState([]);
     const [selectedKeyIds, setSelectedKeyIds] = useState([]);
     const [updatingKeys, setUpdatingKeys] = useState(false);
+    const isMutating = useRef(false);  // ref-based flag to pause polling during mutations
 
     // Resolve relay ID from name or params
     const [relayId, setRelayId] = useState(id);
@@ -87,7 +88,9 @@ export default function RelayView() {
     useEffect(() => {
         if (!relayId) return;
         loadData();
-        const interval = setInterval(loadData, 10000);
+        const interval = setInterval(() => {
+            if (!isMutating.current) loadData();
+        }, 10000);
         return () => clearInterval(interval);
     }, [relayId]);
 
@@ -98,6 +101,7 @@ export default function RelayView() {
     const toggleKey = async (keyId) => {
         if (!canMutate || updatingKeys) return;
         setUpdatingKeys(true);
+        isMutating.current = true;
 
         const isAdding = !selectedKeyIds.includes(keyId);
         const newKeys = isAdding
@@ -109,14 +113,17 @@ export default function RelayView() {
 
         try {
             await api.updateServerKeys(parseInt(relayId), newKeys);
-            // Optionally reload to fetch real status
-            loadData();
+            // Reload after successful mutation (will also refresh health/stats)
+            await loadData();
         } catch (e) {
             alert(e.message);
             // Revert on error
-            setSelectedKeyIds(selectedKeyIds);
+            setSelectedKeyIds(prev => prev.includes(keyId)
+                ? prev.filter(id => id !== keyId)
+                : [...prev, keyId]);
         } finally {
             setUpdatingKeys(false);
+            isMutating.current = false;
         }
     };
 
