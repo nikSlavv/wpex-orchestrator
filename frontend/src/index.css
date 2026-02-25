@@ -4,7 +4,8 @@
    ═══════════════════════════════════════════════════ */
 
 /* ── CSS Variables ─────────────────────── */
-:root {
+:root,
+[data-theme="dark"] {
   --bg-primary: #0e0e14;
   --bg-secondary: #14141e;
   --bg-card: rgba(255, 255, 255, 0.03);
@@ -27,6 +28,46 @@
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.25);
   --shadow-hover: 0 16px 40px rgba(0, 0, 0, 0.35);
   --transition: all 0.3s cubic-bezier(.4, 0, .2, 1);
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: rgba(0, 0, 0, 0.02);
+  --bg-card-hover: rgba(0, 0, 0, 0.04);
+  --border-subtle: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(124, 106, 239, 0.35);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-purple: #6366f1;
+  --accent-purple-light: #818cf8;
+  --accent-green: #10b981;
+  --accent-blue: #3b82f6;
+  --accent-red: #ef4444;
+  --accent-amber: #f59e0b;
+  --shadow-card: 0 4px 16px rgba(0, 0, 0, 0.06);
+  --shadow-hover: 0 16px 32px rgba(0, 0, 0, 0.1);
+}
+
+[data-theme="midnight"] {
+  --bg-primary: #020617;
+  --bg-secondary: #0f172a;
+  --bg-card: rgba(255, 255, 255, 0.02);
+  --bg-card-hover: rgba(255, 255, 255, 0.05);
+  --border-subtle: rgba(255, 255, 255, 0.05);
+  --border-hover: rgba(56, 189, 248, 0.3);
+  --text-primary: #f1f5f9;
+  --text-secondary: #cbd5e1;
+  --text-muted: #64748b;
+  --accent-purple: #38bdf8;
+  --accent-purple-light: #7dd3fc;
+  --accent-green: #2dd4bf;
+  --accent-blue: #818cf8;
+  --accent-red: #fb7185;
+  --accent-amber: #fcd34d;
+  --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 16px 40px rgba(0, 0, 0, 0.6);
 }
 
 /* ── Reset & Base ─────────────────────── */
@@ -421,6 +462,62 @@ input[type="number"] {
   color: var(--accent-red);
 }
 
+/* ── Custom Dialogs ──────────────── */
+.custom-dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.custom-dialog-wrapper {
+  position: absolute;
+  padding: 16px;
+  width: 100%;
+  max-width: 440px;
+  animation: fadeInUp 0.3s cubic-bezier(.4, 0, .2, 1);
+}
+
+.custom-dialog {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4);
+  overflow: hidden;
+}
+
+.custom-dialog-header {
+  padding: 24px 24px 16px;
+}
+
+.custom-dialog-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.custom-dialog-body {
+  padding: 0 24px 24px;
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.custom-dialog-footer {
+  padding: 16px 24px;
+  background: var(--bg-card);
+  border-top: 1px solid var(--border-subtle);
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 /* ── Code Block ──────────────────────── */
 .code-block {
   background: var(--bg-secondary);
@@ -693,7 +790,7 @@ input[type="number"] {
     margin: 16px;
     padding: 20px;
   }
-  
+
   .login-card {
     padding: 24px 16px;
   }

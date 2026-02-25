@@ -6,7 +6,7 @@ import requests
 from fastapi import APIRouter, Depends
 from typing import Optional
 
-from database import get_db
+from database import get_db, DATA_KEY
 from auth import get_current_user
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
@@ -315,27 +315,64 @@ def get_topology_data(user=Depends(get_current_user)):
     # Edges — key-to-relay links
     if is_tenant_scoped:
         cur.execute("""
-            SELECT skl.key_id, skl.server_id, ten.name as tenant_name
+            SELECT skl.key_id, skl.server_id, ten.name as tenant_name, s.name as server_name, pgp_sym_decrypt(k.key_value, %s) as public_key
             FROM server_keys_link skl
             JOIN access_keys k ON skl.key_id = k.id
+            JOIN servers s ON skl.server_id = s.id
             LEFT JOIN tenants ten ON k.tenant_id = ten.id
             WHERE k.tenant_id = %s
-        """, (tenant_id,))
+        """, (DATA_KEY, tenant_id))
     else:
         cur.execute("""
-            SELECT skl.key_id, skl.server_id, ten.name as tenant_name
+            SELECT skl.key_id, skl.server_id, ten.name as tenant_name, s.name as server_name, pgp_sym_decrypt(k.key_value, %s) as public_key
             FROM server_keys_link skl
             JOIN access_keys k ON skl.key_id = k.id
+            JOIN servers s ON skl.server_id = s.id
             LEFT JOIN tenants ten ON k.tenant_id = ten.id
-        """)
+        """, (DATA_KEY,))
+        
+    links = cur.fetchall()
+
+    server_names = {link[3] for link in links}
+    server_stats = {}
+    for s_name in server_names:
+        stats = _fetch_relay_stats(f"wpex-{s_name}")
+        raw_peers = stats.get("peers", {}) if stats else {}
+        
+        peers_list = list(raw_peers.values()) if isinstance(raw_peers, dict) else (raw_peers if isinstance(raw_peers, list) else [])
+        
+        active_count = 0
+        for p in peers_list:
+            if isinstance(p, dict) and (p.get("status") == 1 or p.get("endpoint")):
+                active_count += 1
+                
+        server_stats[s_name] = {"active_count": active_count}
+
     edges = []
-    for link in cur.fetchall():
-        edges.append({
-            "id": f"edge-k{link[0]}-s{link[1]}",
-            "source": f"key-{link[0]}",
-            "target": f"relay-{link[1]}",
-            "tenant": link[2]
-        })
+    from collections import defaultdict
+    s_links = defaultdict(list)
+    for link in links:
+        s_links[link[3]].append(link)
+        
+    for s_name, sub_links in s_links.items():
+        active_available = int(server_stats.get(s_name, {}).get("active_count", 0))
+        
+        for link in sub_links:
+            key_id, server_id, tenant_name, server_name, public_key = link
+            
+            if active_available > 0:
+                status = "active"
+                active_available -= 1
+            else:
+                status = "down"
+
+            edges.append({
+                "id": f"edge-k{key_id}-s{server_id}",
+                "source": f"key-{key_id}",
+                "target": f"relay-{server_id}",
+                "tenant": tenant_name,
+                "status": status
+            })
 
     conn.close()
     return {

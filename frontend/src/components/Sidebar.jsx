@@ -2,7 +2,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../AuthContext';
 import {
     LayoutDashboard, Map, Server, Link2, Users,
-    Key, Settings, FileText, Shield, LogOut, User, ChevronDown, ChevronRight, Activity, Menu, X
+    Key, Settings, FileText, Shield, LogOut, User, ChevronDown, ChevronRight, Menu, X
 } from 'lucide-react';
 import { useState } from 'react';
 
@@ -44,8 +44,8 @@ export default function Sidebar() {
                 <Menu size={24} />
             </button>
             <nav className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
-                <div className="sidebar-brand" onClick={() => setCollapsed(!collapsed)}>
-                    <Activity size={22} className="brand-icon" />
+                <div className="sidebar-brand" onClick={() => setCollapsed(!collapsed)} style={{ cursor: 'pointer' }}>
+                    <img src="/logo.svg" alt="WPEX Logo" width="28" height="28" className="brand-icon" />
                     {!collapsed && <span>WPEX SaaS</span>}
                 </div>
 

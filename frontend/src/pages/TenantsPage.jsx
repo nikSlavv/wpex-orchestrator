@@ -3,12 +3,14 @@ import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import {
     Users, Plus, Trash2, RefreshCw, Settings, ChevronDown, ChevronRight,
-    MapPin, Link2, AlertTriangle, Key
+    MapPin, Link2, AlertTriangle, Key, Check
 } from 'lucide-react';
 import { useAuth } from '../AuthContext';
+import { useDialog } from '../contexts/DialogContext';
 
 export default function TenantsPage() {
     const { user } = useAuth();
+    const { alert, confirm, prompt } = useDialog();
     const isAdmin = user?.role === 'admin';
     const canManageSites = !['viewer', 'executive'].includes(user?.role);
     const [tenants, setTenants] = useState([]);
@@ -19,6 +21,7 @@ export default function TenantsPage() {
     const [form, setForm] = useState({ name: '', slug: '', max_bandwidth_mbps: 100 });
     const [siteForm, setSiteForm] = useState({ name: '', region: '', public_ip: '', subnet: '' });
     const [showSiteCreate, setShowSiteCreate] = useState(null);
+    const [copiedKey, setCopiedKey] = useState(null);
 
     const loadData = async () => {
         try {
@@ -36,16 +39,18 @@ export default function TenantsPage() {
             setShowCreate(false);
             setForm({ name: '', slug: '', max_bandwidth_mbps: 100 });
             loadData();
-        } catch (e) { alert(e.message); }
+        } catch (e) { alert(e.message, { title: 'Errore Creazione' }); }
     };
 
     const handleDelete = async (id) => {
-        if (!confirm('Eliminare questo tenant e tutti i dati associati?')) return;
+        const ok = await confirm('Eliminare questo tenant e tutti i dati associati?', { danger: true });
+        if (!ok) return;
         try { await api.deleteTenant(id); loadData(); } catch (e) { alert(e.message); }
     };
 
     const handleApprove = async (id) => {
-        if (!confirm('Approvare questo tenant e attivarlo?')) return;
+        const ok = await confirm('Approvare questo tenant e attivarlo?');
+        if (!ok) return;
         try { await api.updateTenantStatus(id, 'active'); loadData(); } catch (e) { alert(e.message); }
     };
 
@@ -65,7 +70,7 @@ export default function TenantsPage() {
             setShowSiteCreate(null);
             handleExpand(tenantId);
             loadData();
-        } catch (e) { alert(e.message); }
+        } catch (e) { alert(e.message, { title: 'Errore' }); }
     };
 
     const handleDeleteSite = async (tenantId, siteId) => {
@@ -73,14 +78,40 @@ export default function TenantsPage() {
     };
 
     const handleSetSlug = async (id, currentName) => {
-        const newSlug = window.prompt(`Inserisci lo slug per ${currentName}:`);
+        const newSlug = await prompt(`Inserisci lo slug per ${currentName}:`, {
+            title: 'Imposta Slug',
+            placeholder: 'es: nome-azienda'
+        });
         if (newSlug) {
             try {
                 await api.updateTenant(id, { slug: newSlug });
                 loadData();
             } catch (e) {
-                alert(e.message);
+                alert(e.message, { title: 'Errore' });
             }
+        }
+    };
+
+    const copyKey = async (id, key) => {
+        if (!key || key === 'N/A') return;
+        try {
+            if (navigator?.clipboard?.writeText) {
+                await navigator.clipboard.writeText(key);
+            } else {
+                const textArea = document.createElement("textarea");
+                textArea.value = key;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-999999px";
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand('copy');
+                document.body.removeChild(textArea);
+            }
+            setCopiedKey(id);
+            setTimeout(() => setCopiedKey(null), 2000);
+        } catch (err) {
+            console.error("Copia fallita:", err);
+            alert("Il tuo browser blocca la copia automatica. Seleziona il testo manualmente.");
         }
     };
 
@@ -167,7 +198,33 @@ export default function TenantsPage() {
                                         <div className="grid-2" style={{ marginBottom: 16 }}>
                                             <div>
                                                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>API Key</div>
-                                                <span className="secret">{tenantDetail.api_key || 'N/A'}</span>
+                                                {tenantDetail.api_key ? (
+                                                    <div className="secret-group" style={{ display: 'inline-block' }}>
+                                                        <span
+                                                            className="secret"
+                                                            onClick={() => copyKey(t.id, tenantDetail.api_key)}
+                                                        >
+                                                            {tenantDetail.api_key}
+                                                        </span>
+                                                        {copiedKey === t.id ? (
+                                                            <span style={{
+                                                                position: 'absolute', top: -30, left: '50%', transform: 'translateX(-50%)',
+                                                                background: 'var(--bg-card)', color: 'var(--accent-green)',
+                                                                fontSize: '0.75rem', padding: '4px 8px', borderRadius: 4, whiteSpace: 'nowrap',
+                                                                border: '1px solid var(--border-subtle)', animation: 'fadeInUp 0.15s ease-out',
+                                                                zIndex: 10, boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
+                                                            }}>
+                                                                Copiata! <Check size={10} style={{ display: 'inline', marginLeft: 2 }} />
+                                                            </span>
+                                                        ) : (
+                                                            <span className="hover-msg">
+                                                                Clicca per copiare
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <span className="secret">N/A</span>
+                                                )}
                                             </div>
                                             <div>
                                                 <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>SLA Target</div>
