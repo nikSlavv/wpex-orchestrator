@@ -351,25 +351,24 @@ def get_topology_data(user=Depends(get_current_user)):
             pk_str = str(public_key).strip()
 
         peers = server_stats.get(server_name, {})
-        debug_peers = []
         is_active = False
 
         if isinstance(peers, dict):
-            debug_peers = list(peers.keys())[:3]
-            for peer_pk, p in peers.items():
-                if peer_pk.strip() == pk_str:
-                    if p.get("status") == 1 or p.get("endpoint"):
-                        is_active = True
-                    break
+            for peer_id, p in peers.items():
+                if isinstance(p, dict):
+                    peer_pk = p.get("public_key", p.get("publicKey", peer_id))
+                    if str(peer_pk).strip() == pk_str:
+                        if p.get("status") == 1 or p.get("endpoint"):
+                            is_active = True
+                        break
         elif isinstance(peers, list):
             for p in peers:
-                peer_pk = p.get("public_key") or p.get("publicKey") or ""
-                if peer_pk:
-                    debug_peers.append(peer_pk)
-                if peer_pk.strip() == pk_str:
-                    if p.get("status") == 1 or p.get("endpoint"):
-                        is_active = True
-                    break
+                if isinstance(p, dict):
+                    peer_pk = p.get("public_key", p.get("publicKey", ""))
+                    if str(peer_pk).strip() == pk_str:
+                        if p.get("status") == 1 or p.get("endpoint"):
+                            is_active = True
+                        break
 
         if is_active:
             status = "active"
@@ -383,7 +382,7 @@ def get_topology_data(user=Depends(get_current_user)):
             "tenant": tenant_name,
             "status": status,
             "dbg_pk": pk_str,
-            "dbg_peers": debug_peers
+            "dbg_peers": peers
         })
 
     conn.close()
