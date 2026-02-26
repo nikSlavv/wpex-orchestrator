@@ -15,12 +15,41 @@ from auth import get_current_user
 router = APIRouter(prefix="/api/relays", tags=["relays"])
 
 
-def _get_docker_client():
+def _init_k8s():
     try:
-        import docker
-        return docker.from_env()
+        from kubernetes import config
+        config.load_incluster_config()
     except:
-        return None
+        try:
+            from kubernetes import config
+            config.load_kube_config()
+        except:
+            pass
+
+def _get_k8s_pod_info(name):
+    from kubernetes import client
+    _init_k8s()
+    try:
+        core_api = client.CoreV1Api()
+        pods = core_api.list_namespaced_pod(namespace="wpex", label_selector=f"app=wpex-{name}")
+        if not pods.items:
+            return {"status": "not_found", "restart_count": 0, "image": None, "started_at": None, "pod_name": None}
+        
+        pod = pods.items[0]
+        status = pod.status.phase.lower()
+        restart_count = sum([c.restart_count for c in pod.status.container_statuses]) if pod.status.container_statuses else 0
+        image = pod.spec.containers[0].image
+        started_at = pod.status.start_time.isoformat() if pod.status.start_time else None
+        return {
+            "status": "running" if status == "running" else status,
+            "restart_count": restart_count,
+            "image": image,
+            "started_at": started_at,
+            "pod_name": pod.metadata.name,
+            "node_name": pod.spec.node_name
+        }
+    except:
+        return {"status": "error", "restart_count": 0, "image": None, "started_at": None, "pod_name": None}
 
 
 def _get_relay_name(relay_id: int) -> Optional[str]:
@@ -41,7 +70,7 @@ def get_relay_stats(relay_id: int, user=Depends(get_current_user)):
 
     container_name = f"wpex-{name}"
     try:
-        resp = http_requests.get(f"http://{container_name}:8080/stats", timeout=3)
+        resp = http_requests.get(f"http://{container_name}.wpex.svc.cluster.local:8080/stats", timeout=3)
         if resp.status_code == 200:
             return resp.json()
     except Exception as e:
@@ -58,26 +87,15 @@ def get_relay_health(relay_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Relay non trovato")
 
     container_name = f"wpex-{name}"
-    client = _get_docker_client()
 
-    # Docker status
-    docker_info = {"status": "unknown", "restart_count": 0, "uptime": None, "image": None}
-    if client:
-        try:
-            c = client.containers.get(container_name)
-            docker_info["status"] = c.status
-            docker_info["restart_count"] = c.attrs.get("RestartCount", 0)
-            docker_info["image"] = c.image.tags[0] if c.image.tags else str(c.image.id)[:20]
-            # Get started_at
-            state = c.attrs.get("State", {})
-            docker_info["started_at"] = state.get("StartedAt")
-        except:
-            docker_info["status"] = "not_found"
+    # K8s status
+    docker_info = _get_k8s_pod_info(name)
+    docker_info["uptime"] = None
 
     # WPEX stats
     stats = None
     try:
-        resp = http_requests.get(f"http://{container_name}:8080/stats", timeout=2)
+        resp = http_requests.get(f"http://{container_name}.wpex.svc.cluster.local:8080/stats", timeout=2)
         if resp.status_code == 200:
             stats = resp.json()
     except:
@@ -104,7 +122,7 @@ def get_relay_health(relay_id: int, user=Depends(get_current_user)):
             success_hs = stats.get("successful_handshakes", 0)
             if total_hs > 0:
                 hs_rate = success_hs / total_hs * 100
-                components["handshake_rate"] = {"score": round(hs_rate, 1), "detail": f"{round(hs_rate,1)}% success"}
+                components["handshake_rate"] = {"score": round(hs_rate, 1), "detail": f"{success_hs}/{total_hs} success"}
             else:
                 components["handshake_rate"] = {"score": 100, "detail": "No handshakes yet"}
 
@@ -145,55 +163,36 @@ def get_relay_container_info(relay_id: int, user=Depends(get_current_user)):
         raise HTTPException(status_code=404, detail="Relay non trovato")
 
     container_name = f"wpex-{name}"
-    client = _get_docker_client()
-    if not client:
-        return {"error": "Docker non disponibile"}
+    docker_info = _get_k8s_pod_info(name)
+    if not docker_info.get("pod_name"):
+        return {"error": "Pod non disponibile", "name": container_name}
 
     try:
-        c = client.containers.get(container_name)
-        state = c.attrs.get("State", {})
-        host_config = c.attrs.get("HostConfig", {})
-
-        # Get resource stats
+        # Get resource stats from Metrics Server if available
         resource_stats = {}
         try:
-            stats = c.stats(stream=False)
-            # CPU
-            cpu_delta = stats["cpu_stats"]["cpu_usage"]["total_usage"] - stats["precpu_stats"]["cpu_usage"]["total_usage"]
-            system_delta = stats["cpu_stats"]["system_cpu_usage"] - stats["precpu_stats"]["system_cpu_usage"]
-            if system_delta > 0:
-                num_cpus = len(stats["cpu_stats"]["cpu_usage"].get("percpu_usage", [1]))
-                resource_stats["cpu_pct"] = round((cpu_delta / system_delta) * num_cpus * 100, 2)
-            # Memory
-            mem_usage = stats["memory_stats"].get("usage", 0)
-            mem_limit = stats["memory_stats"].get("limit", 1)
-            resource_stats["memory_usage_mb"] = round(mem_usage / (1024 * 1024), 1)
-            resource_stats["memory_limit_mb"] = round(mem_limit / (1024 * 1024), 1)
-            resource_stats["memory_pct"] = round(mem_usage / mem_limit * 100, 2)
-            # Network
-            networks = stats.get("networks", {})
-            tx_bytes = sum(n.get("tx_bytes", 0) for n in networks.values())
-            rx_bytes = sum(n.get("rx_bytes", 0) for n in networks.values())
-            resource_stats["network_tx_mb"] = round(tx_bytes / (1024 * 1024), 2)
-            resource_stats["network_rx_mb"] = round(rx_bytes / (1024 * 1024), 2)
+            from kubernetes import client
+            api = client.CustomObjectsApi()
+            k8s_metrics = api.get_namespaced_custom_object(
+                "metrics.k8s.io", "v1beta1", "wpex", "pods", docker_info["pod_name"]
+            )
+            containers = k8s_metrics.get("containers", [])
+            if containers:
+                usage = containers[0].get("usage", {})
+                resource_stats["cpu_pct"] = usage.get("cpu", "N/A")
+                resource_stats["memory_usage_mb"] = usage.get("memory", "N/A")
         except:
             pass
 
         return {
-            "name": container_name,
-            "status": c.status,
-            "started_at": state.get("StartedAt"),
-            "finished_at": state.get("FinishedAt"),
-            "restart_count": c.attrs.get("RestartCount", 0),
-            "image": c.image.tags[0] if c.image.tags else None,
-            "image_id": str(c.image.id)[:20],
-            "platform": c.attrs.get("Platform"),
-            "host_config": {
-                "restart_policy": host_config.get("RestartPolicy", {}).get("Name"),
-                "network_mode": host_config.get("NetworkMode"),
-            },
+            "name": docker_info["pod_name"],
+            "status": docker_info["status"],
+            "started_at": docker_info["started_at"],
+            "restart_count": docker_info["restart_count"],
+            "image": docker_info["image"],
+            "node_name": docker_info.get("node_name"),
             "resources": resource_stats,
-            "healthcheck": state.get("Health", {}).get("Status", "none"),
+            "healthcheck": "none",
         }
     except Exception as e:
         return {"error": str(e), "name": container_name}
@@ -209,17 +208,25 @@ def ping_from_relay(relay_id: int, body: DiagnosticRequest, user=Depends(get_cur
     if not name:
         raise HTTPException(status_code=404)
 
-    client = _get_docker_client()
-    if not client:
-        return {"error": "Docker non disponibile"}
+    docker_info = _get_k8s_pod_info(name)
+    if not docker_info.get("pod_name"):
+        return {"error": "Pod non disponibile"}
 
-    container_name = f"wpex-{name}"
     try:
-        c = client.containers.get(container_name)
-        exit_code, output = c.exec_run(f"ping -c 4 -W 2 {body.target}", demux=True)
-        stdout = output[0].decode("utf-8", errors="ignore") if output[0] else ""
-        stderr = output[1].decode("utf-8", errors="ignore") if output[1] else ""
-        return {"exit_code": exit_code, "output": stdout, "error": stderr, "target": body.target}
+        from kubernetes import client
+        from kubernetes.stream import stream
+        core_api = client.CoreV1Api()
+        
+        exec_command = ["/bin/sh", "-c", f"ping -c 4 -W 2 {body.target}"]
+        resp = stream(
+            core_api.connect_get_namespaced_pod_exec,
+            docker_info["pod_name"],
+            "wpex",
+            command=exec_command,
+            stderr=True, stdin=False,
+            stdout=True, tty=False
+        )
+        return {"exit_code": 0, "output": resp, "error": "", "target": body.target}
     except Exception as e:
         return {"error": str(e)}
 
@@ -231,17 +238,25 @@ def traceroute_from_relay(relay_id: int, body: DiagnosticRequest, user=Depends(g
     if not name:
         raise HTTPException(status_code=404)
 
-    client = _get_docker_client()
-    if not client:
-        return {"error": "Docker non disponibile"}
+    docker_info = _get_k8s_pod_info(name)
+    if not docker_info.get("pod_name"):
+        return {"error": "Pod non disponibile"}
 
-    container_name = f"wpex-{name}"
     try:
-        c = client.containers.get(container_name)
-        exit_code, output = c.exec_run(f"traceroute -m 15 -w 2 {body.target}", demux=True)
-        stdout = output[0].decode("utf-8", errors="ignore") if output[0] else ""
-        stderr = output[1].decode("utf-8", errors="ignore") if output[1] else ""
-        return {"exit_code": exit_code, "output": stdout, "error": stderr, "target": body.target}
+        from kubernetes import client
+        from kubernetes.stream import stream
+        core_api = client.CoreV1Api()
+        
+        exec_command = ["/bin/sh", "-c", f"traceroute -m 15 -w 2 {body.target}"]
+        resp = stream(
+            core_api.connect_get_namespaced_pod_exec,
+            docker_info["pod_name"],
+            "wpex",
+            command=exec_command,
+            stderr=True, stdin=False,
+            stdout=True, tty=False
+        )
+        return {"exit_code": 0, "output": resp, "error": "", "target": body.target}
     except Exception as e:
         return {"error": str(e)}
 
@@ -253,13 +268,13 @@ def restart_relay(relay_id: int, user=Depends(get_current_user)):
     if not name:
         raise HTTPException(status_code=404)
 
-    client = _get_docker_client()
-    if not client:
-        raise HTTPException(status_code=503, detail="Docker non disponibile")
-
     try:
-        c = client.containers.get(f"wpex-{name}")
-        c.restart(timeout=10)
+        from kubernetes import client
+        _init_k8s()
+        apps_api = client.AppsV1Api()
+        import datetime
+        patch = {'spec': {'template': {'metadata': {'annotations': {'wpex.io/restartedAt': str(datetime.datetime.now())}}}}}
+        apps_api.patch_namespaced_deployment(name=f"wpex-{name}", namespace="wpex", body=patch)
         return {"message": f"Relay {name} riavviato"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -292,22 +307,14 @@ def upgrade_relay(relay_id: int, body: UpgradeRequest, user=Depends(get_current_
     conn.close()
 
     image = body.image if body.image else "nikoceps/wpex-monitoring:latest"
-    client = _get_docker_client()
-    if not client:
-        raise HTTPException(status_code=503)
+    image = body.image if body.image else "nikoceps/wpex-monitoring:latest"
 
     try:
-        # Pull new image
-        client.images.pull(image)
-        # Restart with new image (simplified — in production would do blue-green)
-        container_name = f"wpex-{name}"
-        try:
-            c = client.containers.get(container_name)
-            c.stop(timeout=10)
-            c.remove()
-        except:
-            pass
-
+        from kubernetes import client
+        _init_k8s()
+        apps_api = client.AppsV1Api()
+        patch = {'spec': {'template': {'spec': {'containers': [{'name': 'relay', 'image': image}]}}}}
+        apps_api.patch_namespaced_deployment(name=f"wpex-{name}", namespace="wpex", body=patch)
         return {"message": f"Upgrade di {name} avviato con immagine {image}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

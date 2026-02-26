@@ -13,6 +13,8 @@ DB_NAME = os.getenv("DB_NAME", "wpex_keys_db")
 DB_USER = os.getenv("DB_USER", "wpex_admin")
 
 def _read_secret(name, default=None):
+    if os.getenv(name):
+        return os.getenv(name)
     try:
         with open(f"/run/secrets/{name}", "r") as f:
             return f.read().strip()

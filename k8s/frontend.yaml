@@ -1,0 +1,48 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wpex-frontend
+  namespace: wpex
+  labels:
+    app: wpex-frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wpex-frontend
+  template:
+    metadata:
+      labels:
+        app: wpex-frontend
+    spec:
+      containers:
+      - name: frontend
+        image: node:20-alpine
+        workingDir: /app
+        command:
+        - sh
+        - -c
+        - "npm install && npm run build && npx -y serve -s dist -l 3000"
+        ports:
+        - containerPort: 3000
+          name: http
+        volumeMounts:
+        - name: frontend-code
+          mountPath: /app
+      volumes:
+      - name: frontend-code
+        hostPath:
+          path: /root/wpex-orchestrator/frontend
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: wpex
+spec:
+  selector:
+    app: wpex-frontend
+  ports:
+  - port: 3000
+    targetPort: 3000

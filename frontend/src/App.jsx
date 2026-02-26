@@ -33,7 +33,7 @@ export default function App() {
             <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
             <Route path="/relays" element={<ProtectedRoute><RelaysView /></ProtectedRoute>} />
             <Route path="/relays/:id" element={<ProtectedRoute><RelayView /></ProtectedRoute>} />
-            <Route path="/server/:name" element={<ProtectedRoute><RelayView /></ProtectedRoute>} />
+
             <Route path="/topology" element={<ProtectedRoute><TopologyMap /></ProtectedRoute>} />
             <Route path="/tenants" element={<ProtectedRoute><TenantsPage /></ProtectedRoute>} />
             <Route path="/keys" element={<ProtectedRoute><KeysPage /></ProtectedRoute>} />

@@ -1,0 +1,59 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: wpex-backend
+  namespace: wpex
+  labels:
+    app: wpex-backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: wpex-backend
+  template:
+    metadata:
+      labels:
+        app: wpex-backend
+    spec:
+      serviceAccountName: wpex-backend-sa
+      containers:
+      - name: backend
+        image: python:3.11-slim
+        workingDir: /app
+        command:
+        - bash
+        - -c
+        - "pip install --no-cache-dir -r requirements.txt && uvicorn main:app --host 0.0.0.0 --port 8000"
+        env:
+        - name: DB_HOST
+          value: db
+        - name: DB_NAME
+          value: wpex_keys_db
+        - name: DB_USER
+          value: wpex_admin
+        envFrom:
+        - secretRef:
+            name: wpex-secrets
+        ports:
+        - containerPort: 8000
+          name: http
+        volumeMounts:
+        - name: app-code
+          mountPath: /app
+      volumes:
+      - name: app-code
+        hostPath:
+          path: /root/wpex-orchestrator/backend
+          type: DirectoryOrCreate
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: wpex
+spec:
+  selector:
+    app: wpex-backend
+  ports:
+  - port: 8000
+    targetPort: 8000
