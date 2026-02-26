@@ -394,7 +394,7 @@ export default function SettingsPage() {
                                     <div><strong>Framework:</strong> FastAPI (Python)</div>
                                     <div><strong>Database:</strong> PostgreSQL</div>
                                     <div><strong>Autenticazione:</strong> JWT + RBAC</div>
-                                    <div><strong>Container Runtime:</strong> Docker Swarm</div>
+                                    <div><strong>Container Runtime:</strong> Kubernetes</div>
                                 </div>
                             </div>
                             <div className="card" style={{ background: 'rgba(255,255,255,0.02)' }}>
@@ -412,7 +412,7 @@ export default function SettingsPage() {
                                     <div><strong>Linguaggio:</strong> Go 1.21</div>
                                     <div><strong>Protocollo:</strong> WireGuard</div>
                                     <div><strong>Stats API:</strong> HTTP :8080</div>
-                                    <div><strong>Rete:</strong> Docker Overlay</div>
+                                    <div><strong>Rete:</strong> Kubernetes CNI</div>
                                 </div>
                             </div>
                         </div>

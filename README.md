@@ -67,24 +67,27 @@ Per l'architettura dettagliata, la guida all'uso dell'interfaccia e le istruzion
 
 ---
 
-## 🛠️ Deploy Rapido (Docker Swarm)
+## 🛠️ Deploy su Kubernetes
 
-L'orchestratore stesso (backend, frontend, DB, Nginx) gira su **Docker Swarm**. I relay WPEX figli vengono creati come pod **Kubernetes**.
+L'intera piattaforma (backend, frontend, DB, Nginx e relay) viene eseguita su **Kubernetes** all'interno del namespace `wpex`. I manifest si trovano nella directory `k8s/`.
 
 ```bash
-# 1. Inizializza Swarm (se non già fatto)
-docker swarm init
+# 1. Assicurati che il cluster e il namespace esistano
+kubectl create namespace wpex || true
 
-# 2. Crea i secret
-printf "password_sicura_db"       | docker secret create db_password -
-printf "chiave_crittografia_pgp"  | docker secret create db_encryption_key -
-printf "segreto_jwt_super_lungo"  | docker secret create jwt_secret -
+# 2. Crea i secret nel namespace (sostituisci i valori con quelli reali)
+kubectl -n wpex create secret generic db-password --from-literal=password='password_sicura_db'
+kubectl -n wpex create secret generic db-encryption-key --from-literal=key='chiave_crittografia_pgp'
+kubectl -n wpex create secret generic jwt-secret --from-literal=secret='segreto_jwt_super_lungo'
 
-# 3. Deploy dello stack
-docker stack deploy -c wpex-stack.yml wpex
+# 3. Applica i manifest
+kubectl apply -f k8s/
+
+# 4. Verifica che i pod siano in esecuzione
+kubectl -n wpex get pods
 ```
 
-> **Nota**: Il backend richiede accesso al kubeconfig per poter creare/gestire i pod relay nel namespace `wpex`.
+Nginx (Ingress) è già configurato per ottenere certificati Let's Encrypt automaticamente se il dominio è raggiungibile.
 
 ---
 

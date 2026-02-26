@@ -10,7 +10,7 @@ Al suo cuore, il sistema orchestra il binario **WPEX** (WireGuard Packet Relay) 
 
 ## 2. Architettura & Stack Tecnologico
 
-L'applicazione segue un'architettura a microservizi distribuita su **Docker Swarm** (per l'orchestratore) e **Kubernetes** (per i relay figli).
+L'applicazione è ora eseguita interamente su **Kubernetes**; l'orchestratore, il gateway e i relay figli convivono nel namespace `wpex`.
 
 | Componente | Tecnologia | Ruolo |
 |---|---|---|
@@ -129,38 +129,30 @@ _(Solo Admin)_ Gestione delle organizzazioni clienti:
 
 ### Prerequisiti
 
-- Un nodo con **Docker + Swarm** attivo (per l'orchestratore)
-- Un cluster **Kubernetes** raggiungibile con namespace `wpex` creato (per i relay)
-- Un dominio con record DNS puntato al server (per Let's Encrypt)
+- Un cluster **Kubernetes** raggiungibile con namespace `wpex` creato (per l'orchestratore e i relay)
+- `kubectl` configurato con accesso al cluster
+- Un dominio con record DNS puntato al server (per il TLS/Ingress)
 
-### Deploy Orchestratore (Docker Swarm)
-
-```bash
-# 1. Crea il namespace K8s per i relay (se non esiste)
-kubectl create namespace wpex
-
-# 2. Crea i secret Docker Swarm
-printf "password_db_sicura"      | docker secret create db_password -
-printf "chiave_crittografia_32+" | docker secret create db_encryption_key -
-printf "jwt_secret_lungo_random" | docker secret create jwt_secret -
-
-# 3. Deploy stack
-docker stack deploy -c wpex-stack.yml wpex
-
-# 4. Verifica
-docker stack services wpex
-```
-
-### Configurazione SSL (Let's Encrypt)
-
-Lo stack include Certbot in modalità auto-renew. Per ottenere il primo certificato:
+### Deployment su Kubernetes
 
 ```bash
-chmod +x init-letsencrypt.sh
-./init-letsencrypt.sh
-```
+# 1. Assicurati che il namespace esista
+kubectl create namespace wpex || true
 
-Modifica il dominio nel script e in `nginx/nginx.conf` prima di eseguirlo.
+# 2. Crea i secret nel namespace (sostituisci con valori reali)
+kubectl -n wpex create secret generic db-password --from-literal=password='password_db_sicura'
+kubectl -n wpex create secret generic db-encryption-key --from-literal=key='chiave_crittografia_32+'
+kubectl -n wpex create secret generic jwt-secret --from-literal=secret='jwt_secret_lungo_random'
+
+# 3. Applica i manifest
+echo "applying manifests..." && kubectl apply -f k8s/
+
+# 4. Controlla lo stato dei pod
+kubectl -n wpex get pods
+```
+### Configurazione SSL (Ingress)
+
+Il manifest di `Ingress` incluso nella directory `k8s/` è predisposto per l'emissione automatica dei certificati Let's Encrypt via cert-manager (o un controller equivalente). Basta assicurarsi che il record DNS punti al bilanciatore di carico del cluster; il resto è gestito dai controller Kubernetes.
 
 ---
 
