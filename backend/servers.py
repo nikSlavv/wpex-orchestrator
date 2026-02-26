@@ -73,7 +73,7 @@ def _deploy_relay(name, udp_port, web_port, keys_list):
     _init_k8s()
     app_name = f"wpex-{name}"
     
-    cmd_args = ["--stats", ":8080"]
+    cmd_args = ["--port", str(udp_port), "--stats", ":8080"]
     for k in keys_list:
         cmd_args.extend(["--allow", k])
     if not keys_list:
