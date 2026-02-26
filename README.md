@@ -1,52 +1,103 @@
 # WPEX Orchestrator
 
-![WPEX Orchestrator Logo](https://img.shields.io/badge/WPEX-Orchestrator-7c6aef?style=for-the-badge)
+![WPEX Orchestrator](https://img.shields.io/badge/WPEX-Orchestrator-7c6aef?style=for-the-badge)
+![FastAPI](https://img.shields.io/badge/FastAPI-3.0-009688?style=flat-square&logo=fastapi)
+![React](https://img.shields.io/badge/React-Vite-61dafb?style=flat-square&logo=react)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-namespace:wpex-326ce5?style=flat-square&logo=kubernetes)
 
-**WPEX Orchestrator** è una piattaforma SaaS per l'orchestrazione e il monitoraggio centralizzato di nodi **WPEX** (WireGuard Packet Relay). Tramite una dashboard web moderna e intuitiva, permette di effettuare il provisioning dinamico di server VPN basati su Docker Swarm, gestire l'accesso degli utenti (RBAC Multitenant) e monitorare lo stato di salute e le performance della rete in tempo reale.
-
-## 🌟 Caratteristiche Principali
-
-- **Provisioning Dinamico (Docker Swarm)**: Crea, avvia, ferma ed elimina istanze server WPEX con un click.
-- **Sicurezza Integrata**: Gestione centralizzata delle chiavi pubbliche WireGuard per prevenire attacchi di amplificazione (Anti-DDoS via whitelist).
-- **Monitoring Real-Time**: Integrazione nativa con le API di diagnostica di WPEX per visualizzare handshake, sessioni attive e consumo di banda.
-- **RBAC Multitenant**: Struttura a ruoli (Admin, Executive, Engineer, Viewer) per delegare l'accesso e isolare le risorse per organizzazione.
-- **Topologia Visuale**: Mappa interattiva dello stato di rete e delle connessioni tra i relay.
-- **Interfaccia Premium**: Frontend in React (Vite) con design responsivo, dark mode nativa e componenti glassmorphism.
-
-## 🚀 Architettura
-
-Il progetto segue un approccio a microservizi:
-1. **Frontend**: Applicazione a singola pagina (SPA) React + Vite per un'esperienza utente fluida.
-2. **Backend**: API scritte in Python (FastAPI) per orchestrare i container Docker comunicando col socket locale.
-3. **Database**: PostgreSQL per la persistenza sicura di utenti, tenant e chiavi (cifrate con PGP).
-4. **Gateway**: Nginx come reverse proxy per instradare le richieste API e servire l'app, con automazione Let's Encrypt (Certbot) per SSL.
-5. **Worker Nodes**: Immagini Docker `wpex` che girano come servizi instradando il traffico WireGuard UDP.
-
-## 📖 Documentazione
-
-Per guide dettagliate sull'architettura, le regole di routing interne a WPEX, il setup e le istruzioni per l'uso dell'interfaccia, fai riferimento al manuale ufficiale:
-
-👉 **[Consulta il Manuale Utente (USER_MANUAL.md)](USER_MANUAL.md)**
-
-## 🛠️ Deploy Veloce
-
-L'applicativo è progettato per girare su un cluster **Docker Swarm**. 
-Un esempio rapido per avviare l'intero stack (DB, Backend, Frontend, Nginx):
-
-```bash
-# 1. Inizializza Swarm (se non già attivo)
-docker swarm init
-
-# 2. Crea i secret di sicurezza
-printf "password_sicura_db" | docker secret create db_password -
-printf "chiave_crittografia_pgp" | docker secret create db_encryption_key -
-printf "segreto_jwt_super_lungo" | docker secret create jwt_secret -
-
-# 3. Fai partire lo stack
-docker stack deploy -c wpex-stack.yml wpex
-```
-> **Nota**: Il servizio backend richiede l'accesso al socket docker sul nodo manager per operare le creazioni dei container figlio.
+**WPEX Orchestrator** è una piattaforma SaaS multi-tenant per l'orchestrazione e il monitoraggio centralizzato di nodi **WPEX** (WireGuard Packet Relay). Tramite una dashboard web moderna permette di fare provisioning dinamico di relay VPN su **Kubernetes**, gestire gli accessi (RBAC multi-tenant) e monitorare in tempo reale lo stato di salute e le performance della rete.
 
 ---
 
-*Realizzato per orchestrare dinamicamente le reti WireGuard mantenendo inalterata la crittografia E2E.*
+## 🌟 Caratteristiche Principali
+
+- **Provisioning su Kubernetes**: Crea, avvia, ferma, riavvia e aggiorna relay WPEX come Deployment K8s con un click — completo di Service NodePort per UDP e HTTP.
+- **Gestione Chiavi WireGuard**: Wallet centralizzato di public key cifrate con `pgcrypto`. Le chiavi vengono iniettate al relay via flag `--allow` al momento del deploy.
+- **Monitoring Real-Time**: Dashboard KPI aggregata + per-relay: handshake rate, sessioni attive, peer connessi, dati trasferiti, health score pesato.
+- **Diagnostica Remota**: Esegui `ping` e `traceroute` direttamente dal container del relay tramite K8s exec.
+- **RBAC Multi-Tenant**: 4 ruoli (Admin, Executive, Engineer, Viewer) con isolamento completo delle risorse per organizzazione.
+- **Audit Log**: Tracciabilità strutturata di tutte le operazioni critiche (crea/elimina relay, modifica chiavi, login, ecc.).
+- **Topologia Visuale**: Mappa interattiva dello stato dei relay e delle connessioni.
+- **Design Responsivo**: Frontend React + Vite con dark mode, glassmorphism e supporto mobile.
+- **TLS automatico**: Nginx con Let's Encrypt / Certbot per HTTPS in produzione.
+
+---
+
+## 🚀 Architettura
+
+```
+Browser (HTTPS)
+    │
+    ▼
+Nginx (TLS 1.3, Let's Encrypt)
+    ├── /           → React Frontend (Vite, :3000)
+    └── /api/*      → FastAPI Backend (Uvicorn, :8000)
+                            │
+                    ┌───────┴────────┐
+               PostgreSQL        K8s API
+            (wpex_keys_db)   (deploy/stop/restart relay pods)
+                                    │
+                        ┌───────────▼───────────┐
+                        │  Pod: wpex-{name}      │
+                        │  ├─ wpex Go binary     │
+                        │  │   UDP :40xxx        │
+                        │  └─ stats HTTP :8080   │
+                        └───────────────────────┘
+                                    ▲
+                        WireGuard UDP (Site Routers)
+```
+
+Stack completo:
+| Layer | Tecnologia |
+|---|---|
+| Frontend | React 18 + Vite |
+| Backend API | Python 3.11 + FastAPI + Uvicorn |
+| Database | PostgreSQL 15 + pgcrypto |
+| Orchestrazione relay | Kubernetes (Python client) |
+| Gateway / TLS | Nginx + Certbot / Let's Encrypt |
+| Relay engine | Go binary (`wpex`) |
+
+---
+
+## 📖 Documentazione
+
+Per l'architettura dettagliata, la guida all'uso dell'interfaccia e le istruzioni di deployment:
+
+👉 **[Manuale Utente (USER_MANUAL.md)](USER_MANUAL.md)**
+
+---
+
+## 🛠️ Deploy Rapido (Docker Swarm)
+
+L'orchestratore stesso (backend, frontend, DB, Nginx) gira su **Docker Swarm**. I relay WPEX figli vengono creati come pod **Kubernetes**.
+
+```bash
+# 1. Inizializza Swarm (se non già fatto)
+docker swarm init
+
+# 2. Crea i secret
+printf "password_sicura_db"       | docker secret create db_password -
+printf "chiave_crittografia_pgp"  | docker secret create db_encryption_key -
+printf "segreto_jwt_super_lungo"  | docker secret create jwt_secret -
+
+# 3. Deploy dello stack
+docker stack deploy -c wpex-stack.yml wpex
+```
+
+> **Nota**: Il backend richiede accesso al kubeconfig per poter creare/gestire i pod relay nel namespace `wpex`.
+
+---
+
+## 🔐 Primo Accesso
+
+1. Naviga all'indirizzo del server (HTTPS).
+2. Registra il primo account — verrà creato in stato `pending`.
+3. Attiva manualmente il primo admin da database:
+   ```sql
+   UPDATE users SET status='active', role='admin' WHERE username='tuo_utente';
+   ```
+4. Da quel momento, approva i nuovi utenti direttamente dalla UI → Impostazioni → Utenti in Attesa.
+
+---
+
+*Realizzato per orchestrare reti WireGuard mantenendo inalterata la crittografia E2E.*

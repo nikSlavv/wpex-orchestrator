@@ -1,83 +1,216 @@
-# WPEX Orchestrator - Manuale Utente
+# WPEX Orchestrator — Manuale Utente
 
 ## 1. Introduzione
-**WPEX Orchestrator** è una piattaforma di gestione e orchestrazione centralizzata per nodi di rete (relays basati su WireGuard). Attraverso una dashboard unificata SaaS, permette di creare, configurare, monitorare e aggiornare istanze server dinamicamente tramite container Docker. 
 
-Al suo cuore, il sistema utilizza **WPEX (WireGuard Packet Relay)**, un relay trasparente progettato per facilitare il NAT traversal senza mai compromettere o decifrare la crittografia end-to-end di WireGuard.
+**WPEX Orchestrator** è una piattaforma SaaS multi-tenant per la gestione centralizzata di nodi di rete VPN basati su WireGuard. Attraverso una dashboard unificata permette di creare, configurare, monitorare e aggiornare istanze relay dinamicamente su **Kubernetes**.
+
+Al suo cuore, il sistema orchestra il binario **WPEX** (WireGuard Packet Relay) — un relay trasparente che facilita il NAT traversal senza mai compromettere né decifrare la crittografia end-to-end di WireGuard.
+
+---
 
 ## 2. Architettura & Stack Tecnologico
-L'applicazione segue un'architettura a microservizi pensata per essere distribuita in cluster **Docker Swarm**.
 
-- **Motore VPN (WPEX)**: Scritto in Go, è un relay a zero-overhead (nessun problema di MTU) che instrada i pacchetti cifrati WireGuard direzionandoli unicamente in base all'indice del peer, senza alcuna conoscenza delle chiavi private. 
-- **Frontend**: React.js (Vite), interamente responsive, UI moderna (Dark Mode/Glassmorphism).
-- **Backend API**: Python 3.11 (FastAPI), gestisce la logica di business globale e comunica col daemon Docker per il provisioning dei nodi WPEX.
-- **Database**: PostgreSQL persistito tramite volumi, per RBAC e storage chiavi.
-- **Reverse Proxy**: Nginx funge da gateway principale, gestendo il traffico HTTP/HTTPS e il caricamento dei certificati SSL (Let's Encrypt tramite Certbot).
+L'applicazione segue un'architettura a microservizi distribuita su **Docker Swarm** (per l'orchestratore) e **Kubernetes** (per i relay figli).
+
+| Componente | Tecnologia | Ruolo |
+|---|---|---|
+| **Relay Engine** | Go (wpex binary) | Instrada pacchetti WireGuard UDP tra peer NAT |
+| **Backend API** | Python 3.11 + FastAPI | Logica di business, RBAC, provisioning K8s |
+| **Frontend** | React 18 + Vite | Dashboard SPA, dark mode, responsive |
+| **Database** | PostgreSQL 15 + pgcrypto | Persistenza chiavi (cifrate), utenti, tenant, audit |
+| **Gateway** | Nginx + Let's Encrypt | Reverse proxy HTTPS, TLS 1.3, rinnovo cert auto |
+| **Orchestrazione** | Kubernetes Python client | Deploy/stop/restart/upgrade pod relay |
+
+---
 
 ## 3. Il Motore WPEX: Come Funziona
-A differenza di soluzioni hub-and-spoke in cui i pacchetti vengono decifrati sul server cloud, WPEX non possiede alcuna chiave privata. 
-Durante la fase di elaborazione:
-1. WPEX apprende l'indirizzo endpoint originario associato all'indice randomico (a 32 bit) che i peer WireGuard esibiscono nella sessione.
-2. Inoltra i messaggi basandosi sull'indice ricevente.
 
-### 3.1 Sicurezza e Protezione da Amplification Attacks
-Per l'handshake inziale (essendo sprovvisto di indice ricevente noto), WPEX esegue un "broadcast" indirizzato agli endpoint noti. Per evitare che questa meccanica venga sfruttata da malintenzionati per attacchi DDoS/Amplification, WPEX Orchestrator inietta staticamente una lista di **Chiavi Pubbliche Autorizzate** (Whitelist) all'avvio del container.
-In questo modo, WPEX scarta istantaneamente qualsiasi tentativo di handshake proveniente da peer le cui public key non siano registrate nel database, pur non potendo decifrarne il traffico.
+WPEX non è un endpoint WireGuard — è un **relay trasparente UDP**. Non possiede né vede alcuna chiave privata.
 
-### 3.2 Monitoring in Tempo Reale
-Ogni nodo WPEX espone interfacce HTTP sulla porta `8080`. Seppur protette e proxate verso l'esterno dall'Orchestrator, forniscono costantemente metriche via JSON su:
-- *Handshake Status* (Connessi vs Handshaking vs Disconnessi)
-- *Sessioni VPN attive*
-- *Conteggio Byte* per peer (Trasferimento Dati)
-- *Tempi e log* (inclusi i roaming dei peer in caso di cambio rete dati).
+### 3.1 Routing dei Pacchetti
+
+1. Ogni peer WireGuard sceglie un **peer index** casuale a 32 bit per identificarsi nella sessione.
+2. WPEX apprende l'associazione `peer_index → indirizzo UDP` al momento del primo handshake.
+3. I pacchetti successivi vengono inoltrati direttamente al peer corretto in base al `receiver_index`.
+
+Per l'**handshake iniziale** (che non ha ancora un receiver index), WPEX fa un broadcast verso tutti gli endpoint noti. Solo il peer corretto risponderà.
+
+### 3.2 Sicurezza Anti-Amplification (Allowlist pubkey)
+
+Il broadcast dell'handshake iniziale sarebbe sfruttabile per attacchi DDoS/amplification. Per mitigarlo, l'Orchestrator inietta una **whitelist di chiavi pubbliche WireGuard** autorizzate al momento del deploy del relay (`--allow <pubkey>`).
+
+Il relay verifica il campo `mac1` di ogni handshake initiation: se la public key non è nella lista, il pacchetto viene scartato immediatamente (log: `invalid mac1 in handshake initiation`).
+
+> **Nota**: Solo le chiavi **pubbliche** sono note al relay — la crittografia E2E rimane intatta.
+
+### 3.3 Monitoring in Tempo Reale
+
+Ogni relay espone un HTTP server interno sulla porta `8080` (accessibile solo dall'Orchestrator tramite K8s internal DNS `wpex-{name}.wpex.svc.cluster.local`):
+
+| Endpoint | Metodo | Descrizione |
+|---|---|---|
+| `/stats` | GET | Statistiche raw JSON (handshake, sessioni, bytes) |
+| `/api/v1/stats` | GET | Stats enhanced con success rate e peer list ordinata |
+| `/api/v1/health` | GET | Health score pesato con breakdown per componente |
+| `/api/v1/config` | GET | Configurazione runtime (CLI args usati all'avvio) |
+| `/api/v1/diagnostics/ping` | POST | Ping dal container verso un target |
+| `/api/v1/diagnostics/traceroute` | POST | Traceroute dal container verso un target |
+
+---
 
 ## 4. Gestione Utenti e Ruoli (RBAC)
-WPEX Orchestrator gestisce il controllo accessi tramite 4 livelli gerarchici per ambienti Multitenant:
 
-- **Admin**: Controllo assoluto (Globale). Gestisce policy di sicurezza, tenant ed elimina risorse.
-- **Executive**: Solo lettura (Globale). Visibilità su metriche di tutte le organizzazioni, senza permessi di scrittura.
-- **Engineer**: Amministratore di Tenant (Locale). Modifica utenti, chiavi e relays della propria organizzazione.
-- **Viewer**: Sola lettura (Locale). Visibilità limitata alle sole dashboard della propria organizzazione.
+WPEX Orchestrator implementa un controllo accessi a **4 livelli gerarchici** in ambiente multi-tenant:
 
-## 5. Guida ai Moduli Principali (Web UI)
+| Ruolo | Scope | Permessi |
+|---|---|---|
+| **Admin** | Globale | Accesso completo. Gestisce tutti i tenant, relay, chiavi, utenti e policy. |
+| **Executive** | Globale | Solo lettura. Visibilità su metriche e KPI di tutte le organizzazioni. |
+| **Engineer** | Locale (proprio tenant) | CRUD su relay e chiavi del proprio tenant. Non può accedere ad altri tenant. |
+| **Viewer** | Locale (proprio tenant) | Solo lettura delle dashboard del proprio tenant. |
+
+Gli utenti si registrano in stato `pending` e devono essere approvati da un Admin prima di poter accedere.
+
+---
+
+## 5. Guida ai Moduli (Web UI)
 
 ### 5.1 Dashboard
-Pannello riassuntivo con le KPI in tempo reale: totale Relay attivi, Health Score globale (calcolato incrociando lo stato dei container e delle API WPEX interne), allarmi critici e statistiche aggregate di banda.
 
-### 5.2 Relays (Istanze Server)
-Pannello operativo per l'orchestrazione. 
-- **Creazione Rapida**: Assegna un nome, la porta UDP (es. 40000) e seleziona le chiavi pubbliche abilitate. L'Orchestrator avvierà istantaneamente il container WPEX esposto in rete.
-- **Monitor View**: Ogni relay ha un suo pannello dedicato. Cliccandolo, si vedono i grafici di CPU/RAM del container aggregati alle statistiche interne di WireGuard (Handshakes, Active Sessions, Data Transferred).
-- **Gestione del Ciclo di Vita**: Pulsanti diretti per Start, Stop, Delete, Restart; oltre ad utility per accedere ai log crudi in tempo reale.
-- **Diagnostica Remota**: Include un mini-terminale HTTP per eseguire `Ping` e `Traceroute` eseguiti contestualmente dal container remoto del relay.
+Pannello riassuntivo con KPI in tempo reale:
+- Numero totale relay attivi / totali
+- Health score globale medio (calcolato su handshake rate, peer connectivity, uptime)
+- Sessioni VPN attive e totale handshake
+- Allarmi critici e relay degradati
+- Statistiche aggregate di banda
 
-### 5.3 Chiavi Globali
-Un portafoglio virtuale per le chiavi Pubbliche Wireguard (Peer Allowed). 
-- Inserisci la stringa base64 (es. `AAAAAAAAAAAAAAAA...=`) nel wallet globale, che sarà criptata via PGP sul database. 
-- Successivamente, all'interno della pagina "Relay Health", potrai scorrere quali chiavi "assegnare" al nodo. Alla pressione di *Salva e Riavvia*, l'Orchestrator inietterà a linea di comando i flag `--allow` necessari al processo Go di wpex per autorizzare i peer.
+### 5.2 Relays
+
+Pannello operativo principale per l'orchestrazione dei relay:
+
+- **Creazione**: Assegna nome, porta UDP e seleziona le chiavi pubbliche autorizzate. L'Orchestrator crea un Deployment K8s (`wpex-{name}`) con il binario che parte con `--port {udp} --allow {pubkey1} --allow {pubkey2} ... --stats :8080`.
+- **Stato**: Ogni relay mostra status live (running/stopped/error), health score, numero di peer connessi.
+- **Relay Detail** (click sul relay): Grafici di handshake, sessioni attive, bytes trasferiti; log raw del pod; diagnostica ping/traceroute.
+- **Ciclo di vita**: Start, Stop, Restart, Delete, Upgrade immagine direttamente dalla UI.
+- **Aggiornamento chiavi**: Modifica la lista di public key autorizzate → l'Orchestrator aggiorna il Deployment K8s con le nuove chiavi.
+
+### 5.3 Chiavi (Keys)
+
+Wallet centralizzato delle public key WireGuard:
+
+1. Inserisci la stringa base64 della public key (44 caratteri, es. `AAAA...=`) e un alias leggibile.
+2. La chiave viene cifrata con `pgcrypto` e salvata nel database — non è mai visibile in chiaro dopo l'inserimento.
+3. Associa le chiavi ai relay dal pannello Relays o dal dettaglio del relay.
+4. Ogni tenant vede e gestisce solo le proprie chiavi.
 
 ### 5.4 Topologia
-Mappa dinamica interattiva in cui le "nuvole" rappresentano i Relay Cloud e i link tracciano lo stato delle interconnessioni, segnalando latenze critiche o interruzioni (colore ambra/rosso) in caso di cadute di rete o nodi in crash.
 
-### 5.5 Impostazioni e Audit
-Per gli amministratori, approvazione nuovi ingressi (utenti in stato `pending`), assegnazione ai Tenant e consultazione delle policy di sistema e tracciabilità operativa tramite Log strutturati delle azioni compiute.
+Mappa interattiva della rete:
+- I nodi rappresentano i relay cloud
+- I link mostrano lo stato delle interconnessioni
+- Colori: verde (healthy), ambra (degradato), rosso (offline/critico)
 
-## 6. Installazione & Deployment (Produzione)
-Assicurarsi che il nodo principale esegua `Docker` in modalità Swarm (`docker swarm init`).
-1. Creare i *secret* globali per il DB e JWT:
-   ```bash
-   printf "mypostgrespassword123" | docker secret create db_password -
-   printf "myencryptionkey12345" | docker secret create db_encryption_key -
-   printf "myjwtsecret12345678" | docker secret create jwt_secret -
-   ```
-2. Fare il deploy dello stack orchestratore:
-   ```bash
-   docker stack deploy -c wpex-stack.yml wpex
-   ```
-   Questa operazione avvierà i servizi backend, frontend, database, nginx proxy e automazione SSL Let's Encrypt.
-   **Avviso Sicurezza**: Il Backend richiede l'accesso al socket Docker (`/var/run/docker.sock`) per lanciare nativamente i container child di `wpex`.
+### 5.5 Tenant
 
-## 7. Flusso di Primo Accesso
-1. A deploy terminato, naviga sull'indirizzo IP/Dominio associato.
-2. Vai alla schermata di "Registrato" e crea il primo account. Poiché è il primo per il sistema, sarà salvato ma settato come `pending` (in attesa di accettazione secondo le policy SaaS).
-3. L'operatore di sistema backend dovrà eseguire manualmente uno sblocco a database modificando lo status in `active` e scalando il `role` a `admin`. Da lì, l'amministratore potrà confermare o rifiutare le successive registrazioni comodamente via interfaccia web.
+_(Solo Admin)_ Gestione delle organizzazioni clienti:
+- Crea e configura tenant con limiti di tunnel, banda, SLA target e regioni consentite
+- Assegna utenti ai tenant
+- Visualizza risorse per tenant
+
+### 5.6 Impostazioni
+
+- **Utenti in attesa**: Approva o rifiuta nuovi account in stato `pending`
+- **Profilo**: Cambia password, configura MFA (TOTP), gestisci whitelist IP
+- **Log di Audit**: Tracciabilità completa delle operazioni (chi, quando, cosa) con filtri per tipo di evento
+
+---
+
+## 6. Installazione & Deployment
+
+### Prerequisiti
+
+- Un nodo con **Docker + Swarm** attivo (per l'orchestratore)
+- Un cluster **Kubernetes** raggiungibile con namespace `wpex` creato (per i relay)
+- Un dominio con record DNS puntato al server (per Let's Encrypt)
+
+### Deploy Orchestratore (Docker Swarm)
+
+```bash
+# 1. Crea il namespace K8s per i relay (se non esiste)
+kubectl create namespace wpex
+
+# 2. Crea i secret Docker Swarm
+printf "password_db_sicura"      | docker secret create db_password -
+printf "chiave_crittografia_32+" | docker secret create db_encryption_key -
+printf "jwt_secret_lungo_random" | docker secret create jwt_secret -
+
+# 3. Deploy stack
+docker stack deploy -c wpex-stack.yml wpex
+
+# 4. Verifica
+docker stack services wpex
+```
+
+### Configurazione SSL (Let's Encrypt)
+
+Lo stack include Certbot in modalità auto-renew. Per ottenere il primo certificato:
+
+```bash
+chmod +x init-letsencrypt.sh
+./init-letsencrypt.sh
+```
+
+Modifica il dominio nel script e in `nginx/nginx.conf` prima di eseguirlo.
+
+---
+
+## 7. Primo Accesso
+
+1. Naviga su `https://tuo-dominio.com`
+2. Clicca **Registrati** e crea il primo account
+3. L'account sarà in stato `pending` — attiva il primo admin manualmente:
+
+```sql
+-- Esegui su PostgreSQL
+UPDATE users SET status = 'active', role = 'admin' WHERE username = 'tuo_utente';
+```
+
+4. Accedi con le tue credenziali
+5. Da **Impostazioni → Utenti in Attesa** approva i futuri account via UI
+
+---
+
+## 8. Configurazione WireGuard sui Client
+
+Per connettere un client WireGuard (es. Mikrotik, Linux, router) al relay:
+
+```ini
+[Interface]
+PrivateKey = <chiave_privata_del_peer>
+# Nessun Address di peer overlay — wpex è trasparente
+
+[Peer]
+PublicKey = <pubkey_dell_altro_peer>
+Endpoint = <ip_o_dominio_relay>:<porta_udp>
+PersistentKeepalive = 25
+AllowedIPs = <subnet_remota>
+```
+
+**Requisiti**:
+- La public key di **questo peer** deve essere nella allowlist del relay (aggiunta tramite Orchestrator → Keys)
+- Tutti i peer che devono comunicare tra loro devono essere collegati allo **stesso relay**
+- `PersistentKeepalive` è fondamentale se il peer è dietro NAT
+
+> **Caso NAT condiviso**: Se più peer escono dallo stesso IP pubblico, assicurarsi che il NAT mantenga porte sorgente stabili. Ogni peer deve usare una porta sorgente WireGuard diversa.
+
+---
+
+## 9. Troubleshooting
+
+| Sintomo | Causa probabile | Soluzione |
+|---|---|---|
+| `invalid mac1 in handshake initiation` nei log | Public key del peer non nella allowlist | Aggiungi la chiave in Orchestrator → Keys e associala al relay |
+| Loop di `Handshake initiated` + `Removed duplicate peer` | Il peer B non è raggiungibile (chiave non autorizzata o non connesso) | Verifica che entrambi i peer abbiano le proprie chiavi aggiunte al relay |
+| Relay mostra porta diversa da quella configurata | Bug porta (fix applicato in `servers.py`) | Redeploya il relay dalla UI per ricreare il pod con `--port` corretto |
+| Health score 0% | Pod K8s non running | Controlla i log del pod in Relays → Detail → Logs |
+| Utente bloccato su `pending` | Nessun admin ha approvato l'account | Approva da Impostazioni → Utenti in Attesa, o da SQL |
