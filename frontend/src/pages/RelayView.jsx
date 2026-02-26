@@ -42,10 +42,6 @@ export default function RelayView() {
 
     const { user } = useAuth();
     const canMutate = !['viewer', 'executive'].includes(user?.role);
-    const [availableKeys, setAvailableKeys] = useState([]);
-    const [selectedKeyIds, setSelectedKeyIds] = useState([]);
-    const [updatingKeys, setUpdatingKeys] = useState(false);
-    const isMutating = useRef(false);
 
     // Resolve relay ID: if id param is numeric use it directly, otherwise treat as name
     const [relayId, setRelayId] = useState(() => {
@@ -57,12 +53,11 @@ export default function RelayView() {
         const rid = parseInt(relayId);
         if (!rid) return;
         try {
-            const [h, c, s, serversData, keysData] = await Promise.all([
+            const [h, c, s, serversData] = await Promise.all([
                 api.getRelayHealth(rid),
                 api.getRelayContainer(rid),
                 api.getRelayStats(rid),
-                api.getServers().catch(() => ({ servers: [] })),
-                api.getKeys().catch(() => ({ keys: [] }))
+                api.getServers().catch(() => ({ servers: [] }))
             ]);
             setHealth(h);
             setContainer(c);
@@ -71,9 +66,7 @@ export default function RelayView() {
             const foundRelay = serversData.servers?.find(r => r.id === rid);
             if (foundRelay) {
                 setRelay(foundRelay);
-                setSelectedKeyIds(foundRelay.keys?.map(k => k.id) || []);
             }
-            setAvailableKeys(keysData.keys || keysData || []);
         } catch (e) { console.error(e); }
         finally { setLoading(false); }
     };
@@ -102,34 +95,6 @@ export default function RelayView() {
         try { await api.restartRelay(parseInt(relayId)); loadData(); } catch (e) { alert(e.message); }
     };
 
-    const toggleKey = async (keyId) => {
-        if (!canMutate || updatingKeys) return;
-        setUpdatingKeys(true);
-        isMutating.current = true;
-
-        const isAdding = !selectedKeyIds.includes(keyId);
-        const newKeys = isAdding
-            ? [...selectedKeyIds, keyId]
-            : selectedKeyIds.filter(id => id !== keyId);
-
-        // Optimistic update
-        setSelectedKeyIds(newKeys);
-
-        try {
-            await api.updateServerKeys(parseInt(relayId), newKeys);
-            // Reload after successful mutation (will also refresh health/stats)
-            await loadData();
-        } catch (e) {
-            alert(e.message);
-            // Revert on error
-            setSelectedKeyIds(prev => prev.includes(keyId)
-                ? prev.filter(id => id !== keyId)
-                : [...prev, keyId]);
-        } finally {
-            setUpdatingKeys(false);
-            isMutating.current = false;
-        }
-    };
 
     const handlePing = async () => {
         if (!diagTarget) return;
@@ -294,39 +259,7 @@ export default function RelayView() {
                             </div>
                         )}
 
-                        {/* Keys Management */}
-                        <div className="card">
-                            <div className="card-header">
-                                <h3 className="card-title"><Key size={18} /> Chiavi Autorizzate</h3>
-                            </div>
 
-                            {availableKeys.length === 0 ? (
-                                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Nessuna chiave disponibile.</p>
-                            ) : (
-                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
-                                    {availableKeys.map(k => (
-                                        <div key={k.id} onClick={() => toggleKey(k.id)}
-                                            style={{
-                                                display: 'flex', alignItems: 'center', gap: 6,
-                                                padding: '6px 12px', borderRadius: 8,
-                                                cursor: (canMutate && !updatingKeys) ? 'pointer' : 'default',
-                                                opacity: updatingKeys ? 0.6 : 1,
-                                                fontSize: '0.84rem', fontWeight: 500, transition: 'all 0.2s',
-                                                background: selectedKeyIds.includes(k.id)
-                                                    ? 'rgba(124,106,239,0.2)' : 'rgba(255,255,255,0.04)',
-                                                border: `1px solid ${selectedKeyIds.includes(k.id)
-                                                    ? 'rgba(124,106,239,0.5)' : 'rgba(255,255,255,0.08)'}`,
-                                                color: selectedKeyIds.includes(k.id) ? '#9b8afb' : 'var(--text-secondary)',
-                                                userSelect: 'none',
-                                            }}>
-                                            <Key size={12} />
-                                            {k.alias || k.name || k.label || `Chiave #${k.id}`}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-
-                        </div>
                     </>
                 ) : tab === 'diagnostics' ? (
                     <div className="card">
