@@ -164,6 +164,13 @@ export const api = {
     updateUserStatus: (userId, status) =>
         request(`/api/auth/users/${userId}/status`, { method: 'PUT', body: JSON.stringify({ status }) }),
 
-    deleteUser: (userId) =>
-        request(`/api/auth/users/${userId}`, { method: 'DELETE' }),
+    // --- Zabbix ---
+    getZabbixHosts: () =>
+        request('/api/zabbix/hosts'),
+
+    getDockerStats: (hostid) =>
+        request(`/api/zabbix/docker/${hostid}`),
+
+    getItemHistory: (itemid, hours = 1, value_type = 0) =>
+        request(`/api/zabbix/history/${itemid}?hours=${hours}&value_type=${value_type}`),
 };
