@@ -75,3 +75,90 @@ def get_item_history(itemid: str, hours: int = 1, value_type: int = 0):
         "limit": 200,
     })
     return [{"clock": int(h["clock"]), "value": h["value"]} for h in data]
+
+
+@router.get("/devices")
+def get_devices():
+    """Return all non-Docker hosts with availability and key metrics."""
+    token = _zbx_login()
+
+    # Get all hosts with availability info
+    hosts = _zbx_call(token, "host.get", {
+        "output": ["hostid", "host", "name", "status"],
+        "selectInterfaces": ["ip", "dns", "type"],
+        "filter": {"status": "0"},  # enabled only
+    })
+
+    result = []
+    for h in hosts:
+        hostid = h["hostid"]
+
+        # Get latest values for key items
+        items = _zbx_call(token, "item.get", {
+            "hostids": hostid,
+            "output": ["itemid", "key_", "lastvalue", "lastclock", "value_type", "units", "name"],
+            "search": {"key_": ""},
+            "searchByAny": True,
+            "filter": {"status": "0"},
+            "sortfield": "key_",
+            "limit": 200,
+        })
+
+        # Extract useful metrics
+        metrics = {}
+        net_items = []
+        for item in items:
+            k = item["key_"]
+            v = item["lastvalue"]
+            if k in ("icmpping", "agent.ping"):
+                metrics["ping"] = v
+                metrics["ping_itemid"] = item["itemid"]
+                metrics["ping_vt"] = item["value_type"]
+            elif k == "icmppingsec":
+                metrics["ping_ms"] = round(float(v) * 1000, 2) if v else None
+            elif k in ("system.uptime", "agent.uptime"):
+                metrics["uptime"] = int(v) if v else None
+                metrics["uptime_itemid"] = item["itemid"]
+                metrics["uptime_vt"] = item["value_type"]
+            elif k in ("system.cpu.util", "system.cpu.util[,idle]"):
+                metrics["cpu"] = round(float(v), 1) if v else None
+                metrics["cpu_itemid"] = item["itemid"]
+                metrics["cpu_vt"] = item["value_type"]
+            elif k.startswith("vm.memory") or k == "system.memory.used":
+                metrics["mem"] = v
+                metrics["mem_itemid"] = item["itemid"]
+                metrics["mem_vt"] = item["value_type"]
+            elif "net.if.in" in k:
+                net_items.append({**item, "direction": "in"})
+            elif "net.if.out" in k:
+                net_items.append({**item, "direction": "out"})
+
+        # Availability: online if ping=1 or agent alive
+        ping_val = metrics.get("ping")
+        available = ping_val == "1" or ping_val == 1
+
+        result.append({
+            "hostid": hostid,
+            "host": h["host"],
+            "name": h["name"],
+            "interfaces": h.get("interfaces", []),
+            "available": available,
+            "metrics": metrics,
+            "net_items": net_items[:6],  # max 3 ifaces in/out
+            "is_docker": h["host"] == "Docker-Host" or h["name"] == "Docker-Host",
+        })
+
+    return result
+
+
+@router.get("/devices/{hostid}/items")
+def get_host_items(hostid: str):
+    """Return all items with lastvalue for any host."""
+    token = _zbx_login()
+    return _zbx_call(token, "item.get", {
+        "hostids": hostid,
+        "output": ["itemid", "name", "key_", "lastvalue", "lastclock", "units", "value_type"],
+        "filter": {"status": "0"},
+        "sortfield": "name",
+        "limit": 300,
+    })

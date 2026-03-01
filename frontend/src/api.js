@@ -173,4 +173,10 @@ export const api = {
 
     getItemHistory: (itemid, hours = 1, value_type = 0) =>
         request(`/api/zabbix/history/${itemid}?hours=${hours}&value_type=${value_type}`),
+
+    getDevices: () =>
+        request('/api/zabbix/devices'),
+
+    getHostItems: (hostid) =>
+        request(`/api/zabbix/devices/${hostid}/items`),
 };

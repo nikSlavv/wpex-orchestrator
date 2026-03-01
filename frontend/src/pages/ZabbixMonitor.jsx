@@ -1,19 +1,31 @@
 import { useState, useEffect, useCallback } from 'react';
 import {
     Activity, RefreshCw, Box, Cpu, HardDrive,
-    Wifi, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Image
+    Wifi, AlertCircle, CheckCircle, XCircle, ChevronDown, ChevronUp, Image,
+    Router, Clock, Signal, Globe
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { api } from '../api';
 import {
-    AreaChart, Area, LineChart, Line,
-    XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend
+    AreaChart, Area,
+    XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
 } from 'recharts';
 
 // ── helpers ──────────────────────────────────────────────────────────
 const toMB = (b) => b ? (Number(b) / 1024 / 1024).toFixed(1) : '0';
 const toTime = (clock) => new Date(clock * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 const pct = (usage, limit) => limit && Number(limit) > 0 ? ((Number(usage) / Number(limit)) * 100).toFixed(1) : null;
+
+function formatUptime(seconds) {
+    if (!seconds) return '—';
+    const s = Number(seconds);
+    const d = Math.floor(s / 86400);
+    const h = Math.floor((s % 86400) / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    if (d > 0) return `${d}g ${h}h`;
+    if (h > 0) return `${h}h ${m}m`;
+    return `${m}m`;
+}
 
 function parseItems(items) {
     const summary = { running: 0, stopped: 0, total: 0, images: 0 };
@@ -191,8 +203,149 @@ function ContainerCard({ c }) {
     );
 }
 
-// ── main page ─────────────────────────────────────────────────────────
-export default function ZabbixMonitor() {
+// ── device tab components ─────────────────────────────────────────────
+function DeviceBadge({ available }) {
+    if (available)
+        return <span style={{ color: 'var(--accent-green)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={12} /> online</span>;
+    return <span style={{ color: 'var(--accent-red)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 4 }}><XCircle size={12} /> offline</span>;
+}
+
+function DeviceCard({ device }) {
+    const [expanded, setExpanded] = useState(false);
+    const m = device.metrics || {};
+    const ip = device.interfaces?.find(i => i.ip && i.ip !== '0.0.0.0')?.ip || '—';
+    const netIn  = device.net_items?.find(i => i.direction === 'in');
+    const netOut = device.net_items?.find(i => i.direction === 'out');
+    const hasCharts = m.ping_itemid || m.cpu_itemid || m.mem_itemid || netIn || netOut;
+
+    return (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div
+                onClick={() => setExpanded(e => !e)}
+                style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, userSelect: 'none' }}
+            >
+                <Router size={16} style={{ color: device.available ? 'var(--accent-green)' : 'var(--accent-red)', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {device.name || device.host}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                        <DeviceBadge available={device.available} />
+                        {ip !== '—' && <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{ip}</span>}
+                    </div>
+                </div>
+
+                {/* Ping ms */}
+                {m.ping_ms != null && (
+                    <div style={{ width: 90, flexShrink: 0, textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 2 }}><Signal size={10} /> Ping</div>
+                        <div style={{ fontSize: '0.82rem', fontWeight: 600, color: m.ping_ms < 10 ? 'var(--accent-green)' : m.ping_ms < 50 ? '#fbbf24' : 'var(--accent-red)' }}>
+                            {Number(m.ping_ms).toFixed(1)} ms
+                        </div>
+                    </div>
+                )}
+
+                {/* CPU bar */}
+                {m.cpu != null && (
+                    <div style={{ width: 120, flexShrink: 0 }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 3 }}><Cpu size={10} /> CPU</div>
+                        <MiniBar value={m.cpu} color="#60a5fa" />
+                    </div>
+                )}
+
+                {/* Uptime */}
+                {m.uptime != null && (
+                    <div style={{ width: 80, flexShrink: 0, textAlign: 'right' }}>
+                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 2 }}><Clock size={10} /> Uptime</div>
+                        <div style={{ fontSize: '0.78rem' }}>{formatUptime(m.uptime)}</div>
+                    </div>
+                )}
+
+                {expanded ? <ChevronUp size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} /> : <ChevronDown size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+            </div>
+
+            {/* Expanded charts */}
+            {expanded && (
+                <div style={{ padding: '0 18px 18px', borderTop: '1px solid var(--border-color)' }}>
+                    {hasCharts ? (
+                        <div style={{ paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                            {m.ping_itemid && <ContainerChart title="Ping (ms)" itemid={m.ping_itemid} valueType={0} transform={v => (parseFloat(v) * 1000).toFixed(2)} unit=" ms" color="#34d399" />}
+                            {m.cpu_itemid && <ContainerChart title="CPU %" itemid={m.cpu_itemid} valueType={0} unit="%" color="#60a5fa" />}
+                            {m.mem_itemid && <ContainerChart title="Memoria %" itemid={m.mem_itemid} valueType={0} unit="%" color="#a78bfa" />}
+                            {netIn  && <ContainerChart title="Net IN (B/s)"  itemid={netIn.itemid}  valueType={3} unit=" B/s" color="#34d399" />}
+                            {netOut && <ContainerChart title="Net OUT (B/s)" itemid={netOut.itemid} valueType={3} unit=" B/s" color="#fbbf24" />}
+                        </div>
+                    ) : (
+                        <div style={{ padding: '16px 0', color: 'var(--text-muted)', fontSize: '0.82rem', textAlign: 'center' }}>
+                            Nessun item monitorato trovato per questo host.
+                        </div>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+}
+
+function DevicesTab() {
+    const [devices, setDevices] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const load = useCallback(async () => {
+        try {
+            setError(null);
+            const data = await api.getDevices();
+            setDevices(data.filter(d => !d.is_docker));
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        load();
+        const i = setInterval(load, 30000);
+        return () => clearInterval(i);
+    }, [load]);
+
+    if (loading) return <div className="loading-screen"><div className="spinner" /></div>;
+    if (error) return (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--accent-red)', padding: 20 }}>
+            <AlertCircle size={20} /><span>{error}</span>
+        </div>
+    );
+
+    const online = devices.filter(d => d.available).length;
+
+    return (
+        <>
+            <div className="kpi-grid">
+                <SummaryCard icon={Globe}       label="Dispositivi totali" value={devices.length}           color="blue" />
+                <SummaryCard icon={CheckCircle} label="Online"             value={online}                   color="green" />
+                <SummaryCard icon={XCircle}     label="Offline"            value={devices.length - online}  color={devices.length - online > 0 ? 'amber' : 'green'} />
+            </div>
+            <div className="card" style={{ marginTop: 24 }}>
+                <div className="card-header">
+                    <h3 className="card-title"><Globe size={16} /> Dispositivi ({devices.length})</h3>
+                </div>
+                {devices.length === 0 ? (
+                    <div className="empty-state" style={{ padding: 32 }}>
+                        <Globe size={40} />
+                        <p>Nessun dispositivo trovato in Zabbix. Aggiungi host nella UI Zabbix.</p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
+                        {devices.map(d => <DeviceCard key={d.hostid} device={d} />)}
+                    </div>
+                )}
+            </div>
+        </>
+    );
+}
+
+// ── Docker tab (extracted) ────────────────────────────────────────────
+function DockerTab() {
     const [dockerHostId, setDockerHostId] = useState(null);
     const [summary, setSummary] = useState(null);
     const [containers, setContainers] = useState([]);
@@ -202,7 +355,6 @@ export default function ZabbixMonitor() {
     const loadData = useCallback(async () => {
         try {
             setError(null);
-            // Find Docker-Host
             let hostId = dockerHostId;
             if (!hostId) {
                 const hosts = await api.getZabbixHosts();
@@ -228,56 +380,73 @@ export default function ZabbixMonitor() {
         return () => clearInterval(i);
     }, [loadData]);
 
+    if (loading && !summary) return <div className="loading-screen"><div className="spinner" /></div>;
+    if (error) return (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--accent-red)', padding: 20 }}>
+            <AlertCircle size={20} /><span>{error}</span>
+        </div>
+    );
+
+    return summary ? (
+        <>
+            <div className="kpi-grid">
+                <SummaryCard icon={CheckCircle} label="Container Running" value={summary.running} color="green" />
+                <SummaryCard icon={XCircle}     label="Container Stopped" value={summary.stopped} color={summary.stopped > 0 ? 'amber' : 'green'} />
+                <SummaryCard icon={Box}         label="Container Totali"  value={summary.total}   color="blue" />
+                <SummaryCard icon={Image}       label="Immagini"          value={summary.images}  color="purple" />
+            </div>
+            <div className="card" style={{ marginTop: 24 }}>
+                <div className="card-header">
+                    <h3 className="card-title"><Box size={16} /> Container ({containers.length})</h3>
+                </div>
+                {containers.length === 0 ? (
+                    <div className="empty-state" style={{ padding: 32 }}>
+                        <Box size={40} /><p>Nessun container rilevato. Attendi il discovery di Zabbix (~5 min).</p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
+                        {containers.map(c => <ContainerCard key={c.name} c={c} />)}
+                    </div>
+                )}
+            </div>
+        </>
+    ) : null;
+}
+
+// ── main page ─────────────────────────────────────────────────────────
+export default function ZabbixMonitor() {
+    const [tab, setTab] = useState('docker');
+
+    const tabBtn = (id, label) => (
+        <button
+            onClick={() => setTab(id)}
+            style={{
+                padding: '8px 20px',
+                fontSize: '0.88rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                borderRadius: 8,
+                border: 'none',
+                background: tab === id ? 'var(--accent-blue)' : 'transparent',
+                color: tab === id ? '#fff' : 'var(--text-muted)',
+                transition: 'all 0.15s',
+            }}
+        >{label}</button>
+    );
+
     return (
         <div className="page">
             <Sidebar />
             <div className="main-content">
                 <div className="page-header">
-                    <h1 className="page-title"><Activity size={24} /> Docker Monitor</h1>
-                    <button className="btn btn-sm" onClick={loadData} disabled={loading}>
-                        <RefreshCw size={14} style={{ animation: loading ? 'spin 1s linear infinite' : 'none' }} /> Aggiorna
-                    </button>
-                </div>
-
-                {loading && !summary && (
-                    <div className="loading-screen"><div className="spinner" /></div>
-                )}
-
-                {error && (
-                    <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--accent-red)', padding: 20 }}>
-                        <AlertCircle size={20} />
-                        <span>{error}</span>
+                    <h1 className="page-title"><Activity size={24} /> Zabbix Monitor</h1>
+                    <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', borderRadius: 10, padding: 4 }}>
+                        {tabBtn('docker',  '🐳 Docker')}
+                        {tabBtn('devices', '🌐 Dispositivi')}
                     </div>
-                )}
-
-                {summary && (
-                    <>
-                        {/* Summary KPI */}
-                        <div className="kpi-grid">
-                            <SummaryCard icon={CheckCircle} label="Container Running" value={summary.running} color="green" />
-                            <SummaryCard icon={XCircle}     label="Container Stopped" value={summary.stopped} color={summary.stopped > 0 ? 'amber' : 'green'} />
-                            <SummaryCard icon={Box}         label="Container Totali"  value={summary.total}   color="blue" />
-                            <SummaryCard icon={Image}       label="Immagini"          value={summary.images}  color="purple" />
-                        </div>
-
-                        {/* Container list */}
-                        <div className="card" style={{ marginTop: 24 }}>
-                            <div className="card-header">
-                                <h3 className="card-title"><Box size={16} /> Container ({containers.length})</h3>
-                            </div>
-                            {containers.length === 0 ? (
-                                <div className="empty-state" style={{ padding: 32 }}>
-                                    <Box size={40} />
-                                    <p>Nessun container rilevato. Attendi il discovery di Zabbix (~5 min).</p>
-                                </div>
-                            ) : (
-                                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
-                                    {containers.map(c => <ContainerCard key={c.name} c={c} />)}
-                                </div>
-                            )}
-                        </div>
-                    </>
-                )}
+                </div>
+                {tab === 'docker'  && <DockerTab />}
+                {tab === 'devices' && <DevicesTab />}
             </div>
         </div>
     );
