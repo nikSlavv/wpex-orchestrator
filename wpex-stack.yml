@@ -35,6 +35,8 @@ services:
       ZABBIX_PASS: zabbix
       ZABBIX_SENDER_PORT: "10051"
       ZABBIX_POLL_INTERVAL: "60"
+    ports:
+      - "8000:8000"
     networks:
       - wpex-network
     secrets:
