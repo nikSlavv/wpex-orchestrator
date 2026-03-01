@@ -31,6 +31,12 @@ spec:
           value: wpex_keys_db
         - name: DB_USER
           value: wpex_admin
+        - name: ZABBIX_URL
+          value: "http://213.165.253.226:8080/api_jsonrpc.php"
+        - name: ZABBIX_USER
+          value: "Admin"
+        - name: ZABBIX_PASS
+          value: "zabbix"
         envFrom:
         - secretRef:
             name: wpex-secrets
