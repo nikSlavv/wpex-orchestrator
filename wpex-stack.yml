@@ -22,11 +22,19 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./backend:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       DB_HOST: db
       DB_NAME: wpex_keys_db
       DB_USER: wpex_admin
       WPEX_NETWORK: wpex_wpex-network
+      ZABBIX_HOST: host.docker.internal
+      ZABBIX_URL: "http://host.docker.internal:8080"
+      ZABBIX_USER: Admin
+      ZABBIX_PASS: zabbix
+      ZABBIX_SENDER_PORT: "10051"
+      ZABBIX_POLL_INTERVAL: "60"
     networks:
       - wpex-network
     secrets:
