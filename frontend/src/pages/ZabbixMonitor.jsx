@@ -398,6 +398,9 @@ function WpexTab() {
         </>
     );
 }
+
+// ── device tab components ─────────────────────────────────────────────
+function DeviceBadge({ available }) {
     if (available)
         return <span style={{ color: 'var(--accent-green)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={12} /> online</span>;
     return <span style={{ color: 'var(--accent-red)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 4 }}><XCircle size={12} /> offline</span>;
