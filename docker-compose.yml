@@ -1,0 +1,64 @@
+services:
+
+  # ── Backend (FastAPI) ────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: wpex-backend
+    environment:
+      # Zabbix
+      ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
+      ZABBIX_USER: "Admin"
+      ZABBIX_PASS: "zabbix"
+      ZABBIX_HOST: "zabbix-server"
+      ZABBIX_SENDER_PORT: "10051"
+      ZABBIX_POLL_INTERVAL: "60"
+      # Docker
+      WPEX_NETWORK: "wpex_wpex-network"
+    volumes:
+      - ./backend:/app
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - wpex-network
+      - monitoring
+    restart: unless-stopped
+
+  # ── Frontend (React + Vite → Nginx) ─────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: wpex-frontend
+    networks:
+      - wpex-network
+    restart: unless-stopped
+
+  # ── Nginx reverse proxy ──────────────────────────────────────────────
+  nginx:
+    image: nginx:alpine
+    container_name: wpex-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - certbot-www:/var/www/certbot:ro
+      - certbot-conf:/etc/letsencrypt:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - wpex-network
+    restart: unless-stopped
+
+volumes:
+  certbot-www:
+  certbot-conf:
+
+networks:
+  wpex-network:
+    driver: bridge
+  monitoring:
+    external: true
+    name: wpex_monitoring
