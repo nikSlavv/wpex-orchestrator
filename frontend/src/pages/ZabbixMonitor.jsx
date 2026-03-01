@@ -282,6 +282,3 @@ export default function ZabbixMonitor() {
         </div>
     );
 }
-};
-
-export default ZabbixMonitor;
