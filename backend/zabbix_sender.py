@@ -21,7 +21,7 @@ from datetime import datetime
 from typing import Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
-from pyzabbix import ZabbixAPI, ZabbixSender, ZabbixMetric
+from pyzabbix import ZabbixSender, ZabbixMetric
 from fastapi import APIRouter
 
 logger = logging.getLogger("zabbix_sender")
@@ -58,63 +58,83 @@ _last_sync = {
 router = APIRouter(prefix="/api/zabbix/sender", tags=["zabbix_sender"])
 
 
-# ── Zabbix API helpers ────────────────────────────────────────────────
-def _get_api() -> ZabbixAPI:
-    zapi = ZabbixAPI(ZABBIX_API_URL)
-    zapi.session.verify = False
-    zapi.timeout = 10
-    zapi.login(ZABBIX_USER, ZABBIX_PASS)
-    return zapi
+# ── Zabbix JSON-RPC client (raw requests, no py-zabbix ZabbixAPI) ────
+_req_id = 0
+
+def _zbx_call(method: str, params: dict, auth: Optional[str] = None) -> dict:
+    """Make a Zabbix API JSON-RPC call, raise on error."""
+    global _req_id
+    _req_id += 1
+    payload = {
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "auth": auth,
+        "id": _req_id,
+    }
+    r = requests.post(
+        f"{ZABBIX_API_URL}/api_jsonrpc.php",
+        json=payload,
+        timeout=10,
+        verify=False,
+    )
+    r.raise_for_status()
+    data = r.json()
+    if "error" in data:
+        raise Exception(data["error"].get("data", data["error"]))
+    return data["result"]
 
 
-def _ensure_host_group(zapi: ZabbixAPI) -> str:
-    groups = zapi.hostgroup.get(filter={"name": [HOST_GROUP_NAME]}, output=["groupid"])
+def _zbx_login() -> str:
+    """Authenticate and return auth token."""
+    return _zbx_call("user.login", {"user": ZABBIX_USER, "password": ZABBIX_PASS})
+
+
+def _ensure_host_group(auth: str) -> str:
+    groups = _zbx_call("hostgroup.get", {"filter": {"name": [HOST_GROUP_NAME]}, "output": ["groupid"]}, auth)
     if groups:
         return groups[0]["groupid"]
-    res = zapi.hostgroup.create(name=HOST_GROUP_NAME)
+    res = _zbx_call("hostgroup.create", {"name": HOST_GROUP_NAME}, auth)
     return res["groupids"][0]
 
 
-def _ensure_host(zapi: ZabbixAPI, host_name: str, groupid: str) -> str:
-    hosts = zapi.host.get(filter={"host": [host_name]}, output=["hostid"])
+def _ensure_host(auth: str, host_name: str, groupid: str) -> str:
+    hosts = _zbx_call("host.get", {"filter": {"host": [host_name]}, "output": ["hostid"]}, auth)
     if hosts:
         return hosts[0]["hostid"]
-    res = zapi.host.create(
-        host=host_name,
-        name=host_name,
-        groups=[{"groupid": groupid}],
-        interfaces=[{
+    res = _zbx_call("host.create", {
+        "host": host_name,
+        "name": host_name,
+        "groups": [{"groupid": groupid}],
+        "interfaces": [{
             "type": 1, "main": 1, "useip": 1,
             "ip": "127.0.0.1", "dns": "", "port": "10050",
         }],
-    )
+    }, auth)
     return res["hostids"][0]
 
 
-def _ensure_items(zapi: ZabbixAPI, hostid: str) -> dict:
+def _ensure_items(auth: str, hostid: str) -> None:
     """Ensure all metric items exist for this host (Zabbix trapper type=2)."""
-    existing = zapi.item.get(
-        hostids=hostid,
-        search={"key_": "wpex."},
-        output=["itemid", "key_"],
-    )
-    key_to_id = {i["key_"]: i["itemid"] for i in existing}
+    existing = _zbx_call("item.get", {
+        "hostids": hostid,
+        "search": {"key_": "wpex."},
+        "output": ["itemid", "key_"],
+    }, auth)
+    existing_keys = {i["key_"] for i in existing}
 
     for item in ITEM_DEFS:
-        if item["key"] not in key_to_id:
-            res = zapi.item.create(
-                hostid=hostid,
-                name=item["name"],
-                key_=item["key"],
-                type=2,               # Zabbix trapper
-                value_type=item["value_type"],
-                units=item["units"],
-                delay=0,
-            )
-            key_to_id[item["key"]] = res["itemids"][0]
+        if item["key"] not in existing_keys:
+            _zbx_call("item.create", {
+                "hostid": hostid,
+                "name": item["name"],
+                "key_": item["key"],
+                "type": 2,
+                "value_type": item["value_type"],
+                "units": item["units"],
+                "delay": 0,
+            }, auth)
             logger.debug(f"Created Zabbix item {item['key']} for host {hostid}")
-
-    return key_to_id
 
 
 # ── Stats fetch helpers ───────────────────────────────────────────────
@@ -166,8 +186,8 @@ def collect_and_push():
 
     # Connect to Zabbix API
     try:
-        zapi = _get_api()
-        groupid = _ensure_host_group(zapi)
+        auth = _zbx_login()
+        groupid = _ensure_host_group(auth)
     except Exception as e:
         msg = f"Zabbix API unreachable: {e}"
         logger.error(msg)
@@ -200,8 +220,8 @@ def collect_and_push():
 
         try:
             # Ensure Zabbix host + items exist
-            hostid = _ensure_host(zapi, container_name, groupid)
-            _ensure_items(zapi, hostid)
+            hostid = _ensure_host(auth, container_name, groupid)
+            _ensure_items(auth, hostid)
 
             # Build and send metrics
             metrics = _extract_metrics(stats)
