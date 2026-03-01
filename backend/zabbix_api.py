@@ -47,14 +47,43 @@ def get_zabbix_hosts():
 
 @router.get("/docker/{hostid}")
 def get_docker_stats(hostid: str):
-    """Return all docker.* items with lastvalue for a host."""
-    token = _zbx_login()
-    items = _zbx_call(token, "item.get", {
-        "hostids": hostid,
-        "search": {"key_": "docker."},
-        "output": ["itemid", "name", "key_", "lastvalue", "lastclock", "units", "value_type"],
-        "sortfield": "key_",
-    })
+    """Fallback per Kubernetes: finge di essere Zabbix e restituisce i Pod del cluster come 'Containers'."""
+    from kubernetes import client, config
+    try:
+        config.load_incluster_config()
+    except:
+        try:
+            config.load_kube_config()
+        except:
+            return []
+
+    core_api = client.CoreV1Api()
+    try:
+        pods = core_api.list_namespaced_pod(namespace='wpex').items
+    except Exception:
+        return []
+
+    running = len([p for p in pods if p.status.phase == "Running"])
+    total = len(pods)
+
+    # Summary items expected by the frontend
+    items = [
+        {"itemid": "k8s_sum_r", "name": "K8s Pods Running", "key_": "docker.containers.running", "lastvalue": str(running), "value_type": "3"},
+        {"itemid": "k8s_sum_s", "name": "K8s Pods Stopped", "key_": "docker.containers.stopped", "lastvalue": str(total - running), "value_type": "3"},
+        {"itemid": "k8s_sum_t", "name": "K8s Pods Total",   "key_": "docker.containers.total",   "lastvalue": str(total), "value_type": "3"},
+        {"itemid": "k8s_sum_i", "name": "K8s Container Images", "key_": "docker.images.total", "lastvalue": "0", "value_type": "3"},
+    ]
+
+    # Map each pod to expected zabbix-like keys
+    for pod in pods:
+        name = pod.metadata.name
+        status = "running" if pod.status.phase == "Running" else "stopped"
+        
+        items.extend([
+            {"itemid": f"s_{name}", "name": f"Pod {name} Status", "key_": f"docker.containers[{name},State.Status]", "lastvalue": status, "value_type": "1"},
+            {"itemid": f"n_{name}", "name": f"Pod {name} Name",   "key_": f"docker.containers[{name},Name]",         "lastvalue": name, "value_type": "1"},
+        ])
+        
     return items
 
 
