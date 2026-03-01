@@ -1,5 +1,24 @@
 services:
 
+  # ── PostgreSQL ───────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    container_name: wpex-db
+    environment:
+      POSTGRES_DB: wpex_keys_db
+      POSTGRES_USER: wpex_admin
+      POSTGRES_PASSWORD: admin
+    volumes:
+      - wpex_db_data:/var/lib/postgresql/data
+    networks:
+      - wpex-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wpex_admin -d wpex_keys_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   # ── Backend (FastAPI) ────────────────────────────────────────────────
   backend:
     build:
@@ -7,6 +26,10 @@ services:
       dockerfile: Dockerfile
     container_name: wpex-backend
     environment:
+      DB_HOST: db
+      DB_NAME: wpex_keys_db
+      DB_USER: wpex_admin
+      DB_PASS: admin
       # Zabbix
       ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
       ZABBIX_USER: "Admin"
@@ -14,11 +37,13 @@ services:
       ZABBIX_HOST: "zabbix-server"
       ZABBIX_SENDER_PORT: "10051"
       ZABBIX_POLL_INTERVAL: "60"
-      # Docker
       WPEX_NETWORK: "wpex_wpex-network"
     volumes:
       - ./backend:/app
       - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      db:
+        condition: service_healthy
     networks:
       - wpex-network
       - monitoring
@@ -52,7 +77,8 @@ services:
       - wpex-network
     restart: unless-stopped
 
-volumes: {}
+volumes:
+  wpex_db_data:
 
 networks:
   wpex-network:
@@ -60,3 +86,4 @@ networks:
   monitoring:
     external: true
     name: wpex_monitoring
+
