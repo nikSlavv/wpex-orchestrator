@@ -28,8 +28,7 @@ spec:
       containers:
       - name: zabbix-db
         image: mysql:8.0
-        command:
-          - mysqld
+        args:
           - --character-set-server=utf8mb4
           - --collation-server=utf8mb4_bin
           - --default-authentication-plugin=mysql_native_password
