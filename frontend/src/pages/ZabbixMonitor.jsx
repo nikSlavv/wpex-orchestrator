@@ -32,6 +32,9 @@ function parseItems(items) {
     const summary = { running: 0, stopped: 0, total: 0, images: 0 };
     const containers = {};
 
+    // List of system pod prefixes to exclude
+    const systemPrefixes = ['zabbix-', 'postgres', 'database', 'db-', 'kube-', 'coredns', 'wpex-backend', 'wpex-frontend', 'wpex-db'];
+
     for (const item of items) {
         const { key_, lastvalue, itemid, value_type } = item;
 
@@ -56,9 +59,15 @@ function parseItems(items) {
         else if ((m = key_.match(/^docker\.net\.if\.out\[(.+),.+,bytes\]$/))) { ensure(m[1]).net_out = lastvalue; ensure(m[1]).itemid_net_out = itemid; }
     }
 
+    // Filter out system containers
+    const filtered = Object.values(containers).filter(c => {
+        const name = (c.label || c.name || '').toLowerCase();
+        return !systemPrefixes.some(prefix => name.toLowerCase().startsWith(prefix.toLowerCase()));
+    });
+
     return {
         summary,
-        containers: Object.values(containers).map(c => ({
+        containers: filtered.map(c => ({
             ...c,
             displayName: c.label || c.name,
             memPct: c.mem_pct || pct(c.mem_usage, c.mem_limit),
@@ -204,8 +213,191 @@ function ContainerCard({ c }) {
     );
 }
 
-// ── device tab components ─────────────────────────────────────────────
-function DeviceBadge({ available }) {
+// ── WPEX Metrics components ──────────────────────────────────────────
+function formatBytes(bytes) {
+    if (!bytes) return '0 B';
+    const b = Number(bytes) || 0;
+    if (b >= 1e9) return (b / 1e9).toFixed(2) + ' GB';
+    if (b >= 1e6) return (b / 1e6).toFixed(2) + ' MB';
+    if (b >= 1e3) return (b / 1e3).toFixed(2) + ' KB';
+    return b + ' B';
+}
+
+function formatPercent(val) {
+    const v = Number(val);
+    return Number.isNaN(v) ? '—' : v.toFixed(2) + '%';
+}
+
+function WpexMetricCard({ relay, metrics }) {
+    const [expanded, setExpanded] = useState(false);
+    const bytesRx = metrics?.['wpex.bytes_rx'] || '0';
+    const bytesTx = metrics?.['wpex.bytes_tx'] || '0';
+    const activePeers = metrics?.['wpex.active_peers'] || '0';
+    const totalPeers = metrics?.['wpex.total_peers'] || '0';
+    const handshakeRate = metrics?.['wpex.handshake_success'] || '0';
+    const uptime = metrics?.['wpex.uptime_seconds'] || '0';
+
+    // Extract relay name from host (e.g., "wpex-myrelay" -> "myrelay")
+    const relayName = relay.host?.replace(/^wpex-/, '') || relay.host || relay.hostid;
+
+    return (
+        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <div
+                onClick={() => setExpanded(e => !e)}
+                style={{ padding: '14px 18px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, userSelect: 'none' }}
+            >
+                <Router size={16} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
+                <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: '0.88rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {relayName}
+                    </div>
+                    <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                        {activePeers} / {totalPeers} peer • {formatUptime(uptime)}
+                    </div>
+                </div>
+
+                {/* Traffic */}
+                <div style={{ width: 100, flexShrink: 0, textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 2 }}><Wifi size={10} /> Traffic</div>
+                    <div style={{ fontSize: '0.75rem' }}>
+                        ↓ {formatBytes(bytesRx)}<br />↑ {formatBytes(bytesTx)}
+                    </div>
+                </div>
+
+                {/* Handshake Rate */}
+                <div style={{ width: 80, flexShrink: 0, textAlign: 'right' }}>
+                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: 2 }}><CheckCircle size={10} /> Rate</div>
+                    <div style={{ fontSize: '0.82rem', fontWeight: 600, color: Number(handshakeRate) > 90 ? 'var(--accent-green)' : Number(handshakeRate) > 70 ? '#fbbf24' : 'var(--accent-red)' }}>
+                        {formatPercent(handshakeRate)}
+                    </div>
+                </div>
+
+                {expanded ? <ChevronUp size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} /> : <ChevronDown size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />}
+            </div>
+
+            {/* Expanded details */}
+            {expanded && (
+                <div style={{ padding: '0 18px 18px', borderTop: '1px solid var(--border-color)' }}>
+                    <div style={{ paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Bytes Ricevuti</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--accent-green)' }}>{formatBytes(bytesRx)}</div>
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Bytes Inviati</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 600, color: 'var(--accent-blue)' }}>{formatBytes(bytesTx)}</div>
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Peer Attivi</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{activePeers} / {totalPeers}</div>
+                        </div>
+                    </div>
+                    <div style={{ paddingTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Handshake Success</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{formatPercent(handshakeRate)}</div>
+                        </div>
+                        <div>
+                            <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Uptime</div>
+                            <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{formatUptime(uptime)}</div>
+                        </div>
+                        <div />
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function WpexTab() {
+    const [relays, setRelays] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+
+    const loadWpexData = useCallback(async () => {
+        try {
+            setError(null);
+            const hosts = await api.getZabbixHosts();
+            
+            // Filter for wpex- hosts
+            const wpexHosts = hosts.filter(h => h.host?.startsWith('wpex-'));
+            
+            // For each relay, fetch its metrics
+            const relaysWithMetrics = await Promise.all(
+                wpexHosts.map(async (host) => {
+                    try {
+                        const items = await api.getHostItems(host.hostid);
+                        const metrics = {};
+                        
+                        // Parse WPEX items
+                        for (const item of items) {
+                            const key = item.key_;
+                            if (key?.startsWith('wpex.')) {
+                                metrics[key] = item.lastvalue;
+                            }
+                        }
+                        
+                        return { host, metrics };
+                    } catch (e) {
+                        console.error(`Failed to load metrics for ${host.host}:`, e);
+                        return { host, metrics: {} };
+                    }
+                })
+            );
+            
+            setRelays(relaysWithMetrics);
+        } catch (e) {
+            setError(e.message);
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadWpexData();
+        const i = setInterval(loadWpexData, 30000);
+        return () => clearInterval(i);
+    }, [loadWpexData]);
+
+    if (loading && relays.length === 0) return <div className="loading-screen"><div className="spinner" /></div>;
+    if (error) return (
+        <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--accent-red)', padding: 20 }}>
+            <AlertCircle size={20} /><span>{error}</span>
+        </div>
+    );
+
+    const totalBytes = relays.reduce((sum, r) => sum + (Number(r.metrics?.['wpex.bytes_rx']) || 0) + (Number(r.metrics?.['wpex.bytes_tx']) || 0), 0);
+    const totalPeers = relays.reduce((sum, r) => sum + (Number(r.metrics?.['wpex.active_peers']) || 0), 0);
+    const avgHandshakeRate = relays.length > 0 
+        ? (relays.reduce((sum, r) => sum + (Number(r.metrics?.['wpex.handshake_success']) || 0), 0) / relays.length).toFixed(2)
+        : 0;
+
+    return (
+        <>
+            <div className="kpi-grid">
+                <SummaryCard icon={Router} label="Relay WPEX" value={relays.length} color="blue" />
+                <SummaryCard icon={Signal} label="Peer Attivi" value={totalPeers} color="green" />
+                <SummaryCard icon={Activity} label="Traffico Totale" value={formatBytes(totalBytes)} color="purple" />
+                <SummaryCard icon={CheckCircle} label="Handshake Avg" value={formatPercent(avgHandshakeRate)} color={Number(avgHandshakeRate) > 90 ? 'green' : 'amber'} />
+            </div>
+            <div className="card" style={{ marginTop: 24 }}>
+                <div className="card-header">
+                    <h3 className="card-title"><Router size={16} /> Relay WPEX ({relays.length})</h3>
+                </div>
+                {relays.length === 0 ? (
+                    <div className="empty-state" style={{ padding: 32 }}>
+                        <Router size={40} />
+                        <p>Nessun relay WPEX trovato. Verifica che Zabbix sia configurato correttamente.</p>
+                    </div>
+                ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
+                        {relays.map(r => <WpexMetricCard key={r.host.hostid} relay={r.host} metrics={r.metrics} />)}
+                    </div>
+                )}
+            </div>
+        </>
+    );
+}
     if (available)
         return <span style={{ color: 'var(--accent-green)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 4 }}><CheckCircle size={12} /> online</span>;
     return <span style={{ color: 'var(--accent-red)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 4 }}><XCircle size={12} /> offline</span>;
@@ -408,7 +600,7 @@ function DockerTab() {
 // ── main page ─────────────────────────────────────────────────────────
 export default function ZabbixMonitor() {
     const { user } = useAuth();
-    const [tab, setTab] = useState('containers');
+    const [tab, setTab] = useState('relays');
 
     if (user?.role !== 'admin') {
         return (
@@ -449,11 +641,11 @@ export default function ZabbixMonitor() {
                 <div className="page-header">
                     <h1 className="page-title"><Activity size={24} /> Monitor</h1>
                     <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', borderRadius: 10, padding: 4 }}>
-                        {tabBtn('containers', 'Containers')}
+                        {tabBtn('relays', 'Relays')}
                         {tabBtn('devices', 'Devices')}
                     </div>
                 </div>
-                {tab === 'containers' && <DockerTab />}
+                {tab === 'relays' && <WpexTab />}
                 {tab === 'devices' && <DevicesTab />}
             </div>
         </div>
