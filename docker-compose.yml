@@ -34,6 +34,8 @@ services:
       ZABBIX_URL: "http://zabbix-web:8080/api_jsonrpc.php"
       ZABBIX_USER: "Admin"
       ZABBIX_PASS: "zabbix"
+      ZABBIX_USER: "Admin"
+      ZABBIX_PASS: "zabbix"
       ZABBIX_HOST: "zabbix-server"
       ZABBIX_SENDER_PORT: "10051"
       ZABBIX_POLL_INTERVAL: "60"

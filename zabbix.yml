@@ -45,6 +45,9 @@ services:
         condition: service_started
     ports:
       - "8080:8080"
+    networks:
+      default:
+      monitoring:
     mem_limit: 256m
     restart: unless-stopped
 
