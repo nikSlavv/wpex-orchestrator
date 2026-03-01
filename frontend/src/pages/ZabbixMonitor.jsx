@@ -14,7 +14,11 @@ import {
 
 // ── helpers ──────────────────────────────────────────────────────────
 const toMB = (b) => b ? (Number(b) / 1024 / 1024).toFixed(1) : '0';
-const toTime = (clock) => new Date(clock * 1000).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+const toTime = (clock, hours = 1) => {
+    const d = new Date(clock * 1000);
+    if (hours > 24) return d.toLocaleDateString('it-IT', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+};
 const pct = (usage, limit) => limit && Number(limit) > 0 ? ((Number(usage) / Number(limit)) * 100).toFixed(1) : null;
 
 function formatUptime(seconds) {
@@ -109,18 +113,18 @@ function MiniBar({ value, max = 100, color = '#34d399' }) {
 const CHART_STYLE = { fontSize: '0.72rem' };
 const TOOLTIP_STYLE = { background: '#1e2535', border: '1px solid #2d3748', borderRadius: 8, fontSize: '0.78rem' };
 
-function ContainerChart({ title, itemid, valueType, transform, unit, color }) {
+function ContainerChart({ title, itemid, valueType, transform, unit, color, hours = 1 }) {
     const [data, setData] = useState([]);
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
         if (!itemid) return;
         setLoading(true);
-        api.getItemHistory(itemid, 1, valueType)
-            .then(raw => setData(raw.map(p => ({ time: toTime(p.clock), value: parseFloat(transform ? transform(p.value) : p.value) }))))
+        api.getItemHistory(itemid, hours, valueType)
+            .then(raw => setData(raw.map(p => ({ time: toTime(p.clock, hours), value: parseFloat(transform ? transform(p.value) : p.value) }))))
             .catch(() => setData([]))
             .finally(() => setLoading(false));
-    }, [itemid]);
+    }, [itemid, hours]);
 
     if (!itemid) return null;
 
@@ -152,7 +156,7 @@ function ContainerChart({ title, itemid, valueType, transform, unit, color }) {
     );
 }
 
-function ContainerCard({ c }) {
+function ContainerCard({ c, hours }) {
     const [expanded, setExpanded] = useState(false);
 
     return (
@@ -200,12 +204,12 @@ function ContainerCard({ c }) {
             {expanded && (
                 <div style={{ padding: '0 18px 18px', borderTop: '1px solid var(--border-color)' }}>
                     <div style={{ paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <ContainerChart title="CPU %" itemid={c.itemid_cpu} valueType={c.vt_cpu ?? 0} unit="%" color="#60a5fa" />
-                        <ContainerChart title="RAM (MB)" itemid={c.itemid_mem} valueType={c.vt_mem ?? 3} transform={v => toMB(v)} unit=" MB" color="#a78bfa" />
+                        <ContainerChart title="CPU %" itemid={c.itemid_cpu} valueType={c.vt_cpu ?? 0} unit="%" color="#60a5fa" hours={hours} />
+                        <ContainerChart title="RAM (MB)" itemid={c.itemid_mem} valueType={c.vt_mem ?? 3} transform={v => toMB(v)} unit=" MB" color="#a78bfa" hours={hours} />
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                        <ContainerChart title="Net IN (MB)" itemid={c.itemid_net_in} valueType={c.vt_net ?? 3} transform={v => toMB(v)} unit=" MB" color="#34d399" />
-                        <ContainerChart title="Net OUT (MB)" itemid={c.itemid_net_out} valueType={c.vt_net ?? 3} transform={v => toMB(v)} unit=" MB" color="#fbbf24" />
+                        <ContainerChart title="Net IN (MB)" itemid={c.itemid_net_in} valueType={c.vt_net ?? 3} transform={v => toMB(v)} unit=" MB" color="#34d399" hours={hours} />
+                        <ContainerChart title="Net OUT (MB)" itemid={c.itemid_net_out} valueType={c.vt_net ?? 3} transform={v => toMB(v)} unit=" MB" color="#fbbf24" hours={hours} />
                     </div>
                 </div>
             )}
@@ -228,7 +232,7 @@ function formatPercent(val) {
     return Number.isNaN(v) ? '—' : v.toFixed(2) + '%';
 }
 
-function WpexMetricCard({ relay, metrics }) {
+function WpexMetricCard({ relay, metrics, hours }) {
     const [expanded, setExpanded] = useState(false);
     const bytesRx = metrics?.['wpex.bytes_rx'] || '0';
     const bytesTx = metrics?.['wpex.bytes_tx'] || '0';
@@ -292,6 +296,12 @@ function WpexMetricCard({ relay, metrics }) {
                             <div style={{ fontSize: '0.9rem', fontWeight: 600 }}>{activePeers} / {totalPeers}</div>
                         </div>
                     </div>
+
+                    <div style={{ paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        {metrics?.['wpex.bytes_rx_itemid'] && <ContainerChart title="Traffico Ricevuto" itemid={metrics['wpex.bytes_rx_itemid']} valueType={metrics['wpex.bytes_rx_vt']} transform={v => toMB(v)} unit=" MB" color="#34d399" hours={hours} />}
+                        {metrics?.['wpex.bytes_tx_itemid'] && <ContainerChart title="Traffico Inviato" itemid={metrics['wpex.bytes_tx_itemid']} valueType={metrics['wpex.bytes_tx_vt']} transform={v => toMB(v)} unit=" MB" color="#fbbf24" hours={hours} />}
+                    </div>
+
                     <div style={{ paddingTop: 12, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16 }}>
                         <div>
                             <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginBottom: 6 }}>Handshake Success</div>
@@ -303,13 +313,18 @@ function WpexMetricCard({ relay, metrics }) {
                         </div>
                         <div />
                     </div>
+
+                    <div style={{ paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+                        {metrics?.['wpex.active_peers_itemid'] && <ContainerChart title="Peer Attivi" itemid={metrics['wpex.active_peers_itemid']} valueType={metrics['wpex.active_peers_vt']} unit="" color="#60a5fa" hours={hours} />}
+                        {metrics?.['wpex.handshake_success_itemid'] && <ContainerChart title="Handshake Rate" itemid={metrics['wpex.handshake_success_itemid']} valueType={metrics['wpex.handshake_success_vt']} transform={v => parseFloat(v).toFixed(2)} unit="%" color="#a78bfa" hours={hours} />}
+                    </div>
                 </div>
             )}
         </div>
     );
 }
 
-function WpexTab() {
+function WpexTab({ hours }) {
     const [relays, setRelays] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -318,25 +333,27 @@ function WpexTab() {
         try {
             setError(null);
             const hosts = await api.getZabbixHosts();
-            
+
             // Filter for wpex- hosts
             const wpexHosts = hosts.filter(h => h.host?.startsWith('wpex-'));
-            
+
             // For each relay, fetch its metrics
             const relaysWithMetrics = await Promise.all(
                 wpexHosts.map(async (host) => {
                     try {
                         const items = await api.getHostItems(host.hostid);
                         const metrics = {};
-                        
+
                         // Parse WPEX items
                         for (const item of items) {
                             const key = item.key_;
                             if (key?.startsWith('wpex.')) {
                                 metrics[key] = item.lastvalue;
+                                metrics[key + '_itemid'] = item.itemid;
+                                metrics[key + '_vt'] = item.value_type;
                             }
                         }
-                        
+
                         return { host, metrics };
                     } catch (e) {
                         console.error(`Failed to load metrics for ${host.host}:`, e);
@@ -344,7 +361,7 @@ function WpexTab() {
                     }
                 })
             );
-            
+
             setRelays(relaysWithMetrics);
         } catch (e) {
             setError(e.message);
@@ -368,7 +385,7 @@ function WpexTab() {
 
     const totalBytes = relays.reduce((sum, r) => sum + (Number(r.metrics?.['wpex.bytes_rx']) || 0) + (Number(r.metrics?.['wpex.bytes_tx']) || 0), 0);
     const totalPeers = relays.reduce((sum, r) => sum + (Number(r.metrics?.['wpex.active_peers']) || 0), 0);
-    const avgHandshakeRate = relays.length > 0 
+    const avgHandshakeRate = relays.length > 0
         ? (relays.reduce((sum, r) => sum + (Number(r.metrics?.['wpex.handshake_success']) || 0), 0) / relays.length).toFixed(2)
         : 0;
 
@@ -391,7 +408,7 @@ function WpexTab() {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
-                        {relays.map(r => <WpexMetricCard key={r.host.hostid} relay={r.host} metrics={r.metrics} />)}
+                        {relays.map(r => <WpexMetricCard key={r.host.hostid} relay={r.host} metrics={r.metrics} hours={hours} />)}
                     </div>
                 )}
             </div>
@@ -406,7 +423,7 @@ function DeviceBadge({ available }) {
     return <span style={{ color: 'var(--accent-red)', fontSize: '0.78rem', display: 'flex', alignItems: 'center', gap: 4 }}><XCircle size={12} /> offline</span>;
 }
 
-function DeviceCard({ device }) {
+function DeviceCard({ device, hours }) {
     const [expanded, setExpanded] = useState(false);
     const m = device.metrics || {};
     const ip = device.interfaces?.find(i => i.ip && i.ip !== '0.0.0.0')?.ip || '—';
@@ -465,11 +482,11 @@ function DeviceCard({ device }) {
                 <div style={{ padding: '0 18px 18px', borderTop: '1px solid var(--border-color)' }}>
                     {hasCharts ? (
                         <div style={{ paddingTop: 16, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-                            {m.ping_itemid && <ContainerChart title="Ping (ms)" itemid={m.ping_itemid} valueType={0} transform={v => (parseFloat(v) * 1000).toFixed(2)} unit=" ms" color="#34d399" />}
-                            {m.cpu_itemid && <ContainerChart title="CPU %" itemid={m.cpu_itemid} valueType={0} unit="%" color="#60a5fa" />}
-                            {m.mem_itemid && <ContainerChart title="Memoria %" itemid={m.mem_itemid} valueType={0} unit="%" color="#a78bfa" />}
-                            {netIn && <ContainerChart title="Net IN (B/s)" itemid={netIn.itemid} valueType={3} unit=" B/s" color="#34d399" />}
-                            {netOut && <ContainerChart title="Net OUT (B/s)" itemid={netOut.itemid} valueType={3} unit=" B/s" color="#fbbf24" />}
+                            {m.ping_itemid && <ContainerChart title="Ping (ms)" itemid={m.ping_itemid} valueType={0} transform={v => (parseFloat(v) * 1000).toFixed(2)} unit=" ms" color="#34d399" hours={hours} />}
+                            {m.cpu_itemid && <ContainerChart title="CPU %" itemid={m.cpu_itemid} valueType={0} unit="%" color="#60a5fa" hours={hours} />}
+                            {m.mem_itemid && <ContainerChart title="Memoria %" itemid={m.mem_itemid} valueType={0} unit="%" color="#a78bfa" hours={hours} />}
+                            {netIn && <ContainerChart title="Net IN (B/s)" itemid={netIn.itemid} valueType={3} unit=" B/s" color="#34d399" hours={hours} />}
+                            {netOut && <ContainerChart title="Net OUT (B/s)" itemid={netOut.itemid} valueType={3} unit=" B/s" color="#fbbf24" hours={hours} />}
                         </div>
                     ) : (
                         <div style={{ padding: '16px 0', color: 'var(--text-muted)', fontSize: '0.82rem', textAlign: 'center' }}>
@@ -482,7 +499,7 @@ function DeviceCard({ device }) {
     );
 }
 
-function DevicesTab() {
+function DevicesTab({ hours }) {
     const [devices, setDevices] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState(null);
@@ -532,7 +549,7 @@ function DevicesTab() {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
-                        {devices.map(d => <DeviceCard key={d.hostid} device={d} />)}
+                        {devices.map(d => <DeviceCard key={d.hostid} device={d} hours={hours} />)}
                     </div>
                 )}
             </div>
@@ -541,7 +558,7 @@ function DevicesTab() {
 }
 
 // ── Docker tab (extracted) ────────────────────────────────────────────
-function DockerTab() {
+function DockerTab({ hours }) {
     const [summary, setSummary] = useState(null);
     const [containers, setContainers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -592,7 +609,7 @@ function DockerTab() {
                     </div>
                 ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '0 0 8px' }}>
-                        {containers.map(c => <ContainerCard key={c.name} c={c} />)}
+                        {containers.map(c => <ContainerCard key={c.name} c={c} hours={hours} />)}
                     </div>
                 )}
             </div>
@@ -604,6 +621,7 @@ function DockerTab() {
 export default function ZabbixMonitor() {
     const { user } = useAuth();
     const [tab, setTab] = useState('relays');
+    const [hours, setHours] = useState(1);
 
     if (user?.role !== 'admin') {
         return (
@@ -641,15 +659,44 @@ export default function ZabbixMonitor() {
         <div className="page">
             <Sidebar />
             <div className="main-content">
-                <div className="page-header">
-                    <h1 className="page-title"><Activity size={24} /> Monitor</h1>
+                <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                        <h1 className="page-title"><Activity size={24} /> Monitor</h1>
+                        <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', borderRadius: 10, padding: 4 }}>
+                            {tabBtn('relays', 'Relays')}
+                            {tabBtn('devices', 'Devices')}
+                        </div>
+                    </div>
+
+                    {/* Time Filter */}
                     <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', borderRadius: 10, padding: 4 }}>
-                        {tabBtn('relays', 'Relays')}
-                        {tabBtn('devices', 'Devices')}
+                        {[
+                            { val: 1, lbl: '1h' },
+                            { val: 6, lbl: '6h' },
+                            { val: 24, lbl: '24h' },
+                            { val: 168, lbl: '7d' },
+                            { val: 720, lbl: '30d' },
+                        ].map(f => (
+                            <button
+                                key={f.val}
+                                onClick={() => setHours(f.val)}
+                                style={{
+                                    padding: '6px 14px',
+                                    fontSize: '0.82rem',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                    borderRadius: 6,
+                                    border: 'none',
+                                    background: hours === f.val ? 'var(--accent-purple)' : 'transparent',
+                                    color: hours === f.val ? '#fff' : 'var(--text-muted)',
+                                    transition: 'all 0.15s',
+                                }}
+                            >{f.lbl}</button>
+                        ))}
                     </div>
                 </div>
-                {tab === 'relays' && <WpexTab />}
-                {tab === 'devices' && <DevicesTab />}
+                {tab === 'relays' && <WpexTab hours={hours} />}
+                {tab === 'devices' && <DevicesTab hours={hours} />}
             </div>
         </div>
     );
