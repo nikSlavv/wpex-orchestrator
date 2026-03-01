@@ -7,3 +7,4 @@ requests==2.31.0
 urllib3<2
 py-zabbix==1.1.7
 APScheduler==3.10.4
+kubernetes==29.0.0
