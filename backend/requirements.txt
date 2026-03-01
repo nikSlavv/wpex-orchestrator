@@ -2,6 +2,9 @@ fastapi==0.115.0
 uvicorn==0.30.0
 psycopg2-binary==2.9.9
 PyJWT==2.8.0
-kubernetes>=28.1.0
+docker==7.1.0
 requests==2.31.0
 urllib3<2
+py-zabbix==1.1.7
+APScheduler==3.10.4
+kubernetes>=28.1.0
