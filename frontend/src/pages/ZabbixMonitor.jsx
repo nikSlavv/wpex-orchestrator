@@ -347,7 +347,6 @@ function DevicesTab() {
 
 // ── Docker tab (extracted) ────────────────────────────────────────────
 function DockerTab() {
-    const [dockerHostId, setDockerHostId] = useState(null);
     const [summary, setSummary] = useState(null);
     const [containers, setContainers] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -356,15 +355,7 @@ function DockerTab() {
     const loadData = useCallback(async () => {
         try {
             setError(null);
-            let hostId = dockerHostId;
-            if (!hostId) {
-                const hosts = await api.getZabbixHosts();
-                const dh = hosts.find(h => h.host === 'Docker-Host' || h.name === 'Docker-Host');
-                if (!dh) throw new Error('Host "Docker-Host" non trovato in Zabbix. Crealo prima nella UI.');
-                hostId = dh.hostid;
-                setDockerHostId(hostId);
-            }
-            const items = await api.getDockerStats(hostId);
+            const items = await api.getDockerStats('k8s_pods');
             const parsed = parseItems(items);
             setSummary(parsed.summary);
             setContainers(parsed.containers);
@@ -373,7 +364,7 @@ function DockerTab() {
         } finally {
             setLoading(false);
         }
-    }, [dockerHostId]);
+    }, []);
 
     useEffect(() => {
         loadData();
