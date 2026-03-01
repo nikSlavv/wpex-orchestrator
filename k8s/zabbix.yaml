@@ -46,9 +46,6 @@ spec:
           value: root_pass
         ports:
         - containerPort: 3306
-        resources:
-          limits:
-            memory: "512Mi"
         volumeMounts:
         - name: data
           mountPath: /var/lib/mysql
@@ -110,9 +107,6 @@ spec:
           value: "2"
         ports:
         - containerPort: 10051
-        resources:
-          limits:
-            memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
@@ -163,9 +157,6 @@ spec:
           value: Europe/Rome
         ports:
         - containerPort: 8080
-        resources:
-          limits:
-            memory: "256Mi"
 ---
 apiVersion: v1
 kind: Service
