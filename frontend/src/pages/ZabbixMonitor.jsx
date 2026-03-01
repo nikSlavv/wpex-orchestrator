@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import Sidebar from '../components/Sidebar';
 import { api } from '../api';
+import { useAuth } from '../AuthContext';
 import {
     AreaChart, Area,
     XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid
@@ -34,9 +35,9 @@ function parseItems(items) {
     for (const item of items) {
         const { key_, lastvalue, itemid, value_type } = item;
 
-        if (key_ === 'docker.containers.running')  { summary.running  = Number(lastvalue) || 0; continue; }
-        if (key_ === 'docker.containers.stopped')  { summary.stopped  = Number(lastvalue) || 0; continue; }
-        if (key_ === 'docker.containers.total')    { summary.total    = Number(lastvalue) || 0; continue; }
+        if (key_ === 'docker.containers.running') { summary.running = Number(lastvalue) || 0; continue; }
+        if (key_ === 'docker.containers.stopped') { summary.stopped = Number(lastvalue) || 0; continue; }
+        if (key_ === 'docker.containers.total') { summary.total = Number(lastvalue) || 0; continue; }
         if (key_ === 'docker.images.total' || key_ === 'docker.images') { summary.images = Number(lastvalue) || 0; continue; }
 
         const ensure = (name) => {
@@ -45,14 +46,14 @@ function parseItems(items) {
         };
 
         let m;
-        if ((m = key_.match(/^docker\.containers\[(.+),State\.Status\]$/)))       { ensure(m[1]).status = lastvalue; }
-        else if ((m = key_.match(/^docker\.containers\[(.+),Name\]$/)))           { ensure(m[1]).label  = lastvalue?.replace(/^\//, ''); }
-        else if ((m = key_.match(/^docker\.cpu\.util\[(.+)\]$/)))                 { ensure(m[1]).cpu    = Number(lastvalue || 0).toFixed(1); ensure(m[1]).itemid_cpu = itemid; ensure(m[1]).vt_cpu = value_type; }
-        else if ((m = key_.match(/^docker\.mem\[(.+),usage\]$/)))                 { ensure(m[1]).mem_usage = lastvalue; ensure(m[1]).itemid_mem = itemid; ensure(m[1]).vt_mem = value_type; }
-        else if ((m = key_.match(/^docker\.mem\[(.+),limit\]$/)))                 { ensure(m[1]).mem_limit = lastvalue; }
-        else if ((m = key_.match(/^docker\.mem\[(.+),usage_pct\]$/)))             { ensure(m[1]).mem_pct = Number(lastvalue || 0).toFixed(1); }
-        else if ((m = key_.match(/^docker\.net\.if\.in\[(.+),.+,bytes\]$/)))      { ensure(m[1]).net_in  = lastvalue; ensure(m[1]).itemid_net_in  = itemid; ensure(m[1]).vt_net = value_type; }
-        else if ((m = key_.match(/^docker\.net\.if\.out\[(.+),.+,bytes\]$/)))     { ensure(m[1]).net_out = lastvalue; ensure(m[1]).itemid_net_out = itemid; }
+        if ((m = key_.match(/^docker\.containers\[(.+),State\.Status\]$/))) { ensure(m[1]).status = lastvalue; }
+        else if ((m = key_.match(/^docker\.containers\[(.+),Name\]$/))) { ensure(m[1]).label = lastvalue?.replace(/^\//, ''); }
+        else if ((m = key_.match(/^docker\.cpu\.util\[(.+)\]$/))) { ensure(m[1]).cpu = Number(lastvalue || 0).toFixed(1); ensure(m[1]).itemid_cpu = itemid; ensure(m[1]).vt_cpu = value_type; }
+        else if ((m = key_.match(/^docker\.mem\[(.+),usage\]$/))) { ensure(m[1]).mem_usage = lastvalue; ensure(m[1]).itemid_mem = itemid; ensure(m[1]).vt_mem = value_type; }
+        else if ((m = key_.match(/^docker\.mem\[(.+),limit\]$/))) { ensure(m[1]).mem_limit = lastvalue; }
+        else if ((m = key_.match(/^docker\.mem\[(.+),usage_pct\]$/))) { ensure(m[1]).mem_pct = Number(lastvalue || 0).toFixed(1); }
+        else if ((m = key_.match(/^docker\.net\.if\.in\[(.+),.+,bytes\]$/))) { ensure(m[1]).net_in = lastvalue; ensure(m[1]).itemid_net_in = itemid; ensure(m[1]).vt_net = value_type; }
+        else if ((m = key_.match(/^docker\.net\.if\.out\[(.+),.+,bytes\]$/))) { ensure(m[1]).net_out = lastvalue; ensure(m[1]).itemid_net_out = itemid; }
     }
 
     return {
@@ -214,7 +215,7 @@ function DeviceCard({ device }) {
     const [expanded, setExpanded] = useState(false);
     const m = device.metrics || {};
     const ip = device.interfaces?.find(i => i.ip && i.ip !== '0.0.0.0')?.ip || '—';
-    const netIn  = device.net_items?.find(i => i.direction === 'in');
+    const netIn = device.net_items?.find(i => i.direction === 'in');
     const netOut = device.net_items?.find(i => i.direction === 'out');
     const hasCharts = m.ping_itemid || m.cpu_itemid || m.mem_itemid || netIn || netOut;
 
@@ -272,7 +273,7 @@ function DeviceCard({ device }) {
                             {m.ping_itemid && <ContainerChart title="Ping (ms)" itemid={m.ping_itemid} valueType={0} transform={v => (parseFloat(v) * 1000).toFixed(2)} unit=" ms" color="#34d399" />}
                             {m.cpu_itemid && <ContainerChart title="CPU %" itemid={m.cpu_itemid} valueType={0} unit="%" color="#60a5fa" />}
                             {m.mem_itemid && <ContainerChart title="Memoria %" itemid={m.mem_itemid} valueType={0} unit="%" color="#a78bfa" />}
-                            {netIn  && <ContainerChart title="Net IN (B/s)"  itemid={netIn.itemid}  valueType={3} unit=" B/s" color="#34d399" />}
+                            {netIn && <ContainerChart title="Net IN (B/s)" itemid={netIn.itemid} valueType={3} unit=" B/s" color="#34d399" />}
                             {netOut && <ContainerChart title="Net OUT (B/s)" itemid={netOut.itemid} valueType={3} unit=" B/s" color="#fbbf24" />}
                         </div>
                     ) : (
@@ -321,9 +322,9 @@ function DevicesTab() {
     return (
         <>
             <div className="kpi-grid">
-                <SummaryCard icon={Globe}       label="Dispositivi totali" value={devices.length}           color="blue" />
-                <SummaryCard icon={CheckCircle} label="Online"             value={online}                   color="green" />
-                <SummaryCard icon={XCircle}     label="Offline"            value={devices.length - online}  color={devices.length - online > 0 ? 'amber' : 'green'} />
+                <SummaryCard icon={Globe} label="Dispositivi totali" value={devices.length} color="blue" />
+                <SummaryCard icon={CheckCircle} label="Online" value={online} color="green" />
+                <SummaryCard icon={XCircle} label="Offline" value={devices.length - online} color={devices.length - online > 0 ? 'amber' : 'green'} />
             </div>
             <div className="card" style={{ marginTop: 24 }}>
                 <div className="card-header">
@@ -391,9 +392,9 @@ function DockerTab() {
         <>
             <div className="kpi-grid">
                 <SummaryCard icon={CheckCircle} label="Container Running" value={summary.running} color="green" />
-                <SummaryCard icon={XCircle}     label="Container Stopped" value={summary.stopped} color={summary.stopped > 0 ? 'amber' : 'green'} />
-                <SummaryCard icon={Box}         label="Container Totali"  value={summary.total}   color="blue" />
-                <SummaryCard icon={Image}       label="Immagini"          value={summary.images}  color="purple" />
+                <SummaryCard icon={XCircle} label="Container Stopped" value={summary.stopped} color={summary.stopped > 0 ? 'amber' : 'green'} />
+                <SummaryCard icon={Box} label="Container Totali" value={summary.total} color="blue" />
+                <SummaryCard icon={Image} label="Immagini" value={summary.images} color="purple" />
             </div>
             <div className="card" style={{ marginTop: 24 }}>
                 <div className="card-header">
@@ -415,7 +416,23 @@ function DockerTab() {
 
 // ── main page ─────────────────────────────────────────────────────────
 export default function ZabbixMonitor() {
-    const [tab, setTab] = useState('docker');
+    const { user } = useAuth();
+    const [tab, setTab] = useState('containers');
+
+    if (user?.role !== 'admin') {
+        return (
+            <div className="page">
+                <Sidebar />
+                <div className="main-content">
+                    <div className="empty-state" style={{ marginTop: 100 }}>
+                        <AlertCircle size={40} style={{ color: 'var(--accent-red)', marginBottom: 16 }} />
+                        <h2 style={{ color: 'var(--text)' }}>Accesso Negato</h2>
+                        <p>Solo gli amministratori di sistema possono accedere al monitoraggio di infrastruttura.</p>
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     const tabBtn = (id, label) => (
         <button
@@ -439,13 +456,13 @@ export default function ZabbixMonitor() {
             <Sidebar />
             <div className="main-content">
                 <div className="page-header">
-                    <h1 className="page-title"><Activity size={24} /> Zabbix Monitor</h1>
+                    <h1 className="page-title"><Activity size={24} /> Monitor</h1>
                     <div style={{ display: 'flex', gap: 4, background: 'var(--bg-card)', borderRadius: 10, padding: 4 }}>
-                        {tabBtn('docker',  '🐳 Docker')}
-                        {tabBtn('devices', '🌐 Dispositivi')}
+                        {tabBtn('containers', 'Containers')}
+                        {tabBtn('devices', 'Devices')}
                     </div>
                 </div>
-                {tab === 'docker'  && <DockerTab />}
+                {tab === 'containers' && <DockerTab />}
                 {tab === 'devices' && <DevicesTab />}
             </div>
         </div>

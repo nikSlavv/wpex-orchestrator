@@ -12,9 +12,9 @@ const NAV_ITEMS = [
     { divider: true },
     { to: '/relays', icon: Server, label: 'Relays', roles: ['admin', 'engineer'] },
     { to: '/tenants', icon: Users, label: 'Tenants', roles: ['admin'] },
-    { to: '/keys', icon: Key, label: 'Chiavi', roles: ['admin', 'engineer'] },
+    { to: '/keys', icon: Key, label: 'Keys', roles: ['admin', 'engineer'] },
     { divider: true },
-    { to: '/zabbix', icon: Activity, label: 'Zabbix Monitor', roles: ['admin', 'engineer'] },
+    { to: '/zabbix', icon: Activity, label: 'Monitor', roles: ['admin'] },
     { to: '/audit', icon: FileText, label: 'Audit Log', roles: ['admin'] },
     { to: '/settings', icon: Shield, label: 'Settings', roles: ['admin', 'engineer'] },
 ];
@@ -46,7 +46,7 @@ export default function Sidebar() {
             </button>
             <nav className={`sidebar ${collapsed ? 'collapsed' : ''} ${mobileOpen ? 'mobile-open' : ''}`}>
                 <div className="sidebar-brand" onClick={() => setCollapsed(!collapsed)}>
-                    <Activity size={22} className="brand-icon" />
+                    <img src="/logo.svg" alt="WPEX Logo" width="22" height="22" className="brand-icon" style={{ filter: 'drop-shadow(0 0 8px rgba(99, 102, 241, 0.5))' }} />
                     {!collapsed && <span>WPEX SaaS</span>}
                 </div>
 
